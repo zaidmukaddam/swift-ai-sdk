@@ -1,0 +1,99 @@
+---
+title: Agents
+description: The Agent abstraction, subagents, and agents as chat transports.
+icon: Bot
+---
+
+`Agent` is the `ToolLoopAgent` analog: a model bundled with instructions,
+tools, and loop settings, callable many times.
+
+```swift
+let agent = Agent(
+  model: AnthropicModel("claude-sonnet-5"),
+  instructions: "You are a terse weather assistant.",
+  tools: [weatherTool],
+  maxSteps: 6
+)
+
+let result = try await agent.generate(prompt: "Weather in Mumbai?")
+let stream = agent.stream(messages: history)
+```
+
+Everything `generateText` accepts, `Agent` captures up front: `toolChoice`,
+`activeTools`, `toolOrder`, `toolsContext`, sampling settings, `reasoning`,
+`stopWhen`, `prepareCall`, `prepareStep`, `onStepFinish`, and
+`providerOptions`.
+
+## Configuring a call
+
+`prepareCall` runs once, before the loop, to reconfigure the whole call from
+runtime inputs — swap the model, rewrite messages, change tools or sampling.
+Return only what you want to change; everything else falls through. (Its
+step-level sibling is `prepareStep`.)
+
+```swift
+let agent = Agent(
+  model: OpenAIModel("gpt-5.6-luna"),          // default: fast
+  tools: [search, calculator],
+  prepareCall: { ctx in
+    isHardQuestion(ctx.messages)
+      ? PrepareCallResult(model: OpenAIModel("gpt-5.6-sol"), reasoning: .high)
+      : nil
+  }
+)
+```
+
+`prepareCall` and `prepareStep` are also parameters on `generateText` and
+`streamText` directly, not just on `Agent`.
+
+## Tool order
+
+`toolOrder` fixes the order tools are sent to the provider — useful when a
+model is sensitive to tool position. Listed tools come first in that order;
+anything unlisted is appended alphabetically.
+
+```swift
+Agent(model: model, tools: [search, calc, weather], toolOrder: ["weather", "search"])
+// provider sees: weather, search, calc
+```
+
+## Subagents
+
+Any agent becomes a tool for another agent.
+The orchestrator keeps its own context window clean and delegates focused
+tasks to specialists that run their full loop and return only their final
+text.
+
+```swift
+let researcher = Agent(
+  model: model,
+  instructions: "You research questions and answer with dense facts."
+)
+let writer = Agent(
+  model: model,
+  instructions: "You turn notes into friendly prose."
+)
+
+let orchestrator = Agent(
+  model: model,
+  instructions: "Plan the work, delegate to specialists, then combine.",
+  tools: [
+    researcher.asTool(name: "researcher", description: "Delegate research."),
+    writer.asTool(name: "writer", description: "Delegate drafting.")
+  ]
+)
+```
+
+## Agents as chat transports
+
+`Agent` conforms to `ChatTransport`, so a chat UI can run against it
+directly with no server, the in-process analog of serving an agent from a
+route:
+
+```swift
+@State var chat = ChatSession(transport: agent)
+```
+
+UI messages convert to model messages, the agent's loop runs, and events
+come back as UI message chunks. Regeneration, tool approvals, and
+client-side tool results all work identically to the HTTP transport.

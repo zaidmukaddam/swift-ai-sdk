@@ -1,0 +1,140 @@
+---
+title: Your first request
+description: Generate, stream, and swap providers in five minutes.
+---
+
+Covers `Examples/01-GenerateText.swift`, `02-StreamText.swift`, and
+`04-ProviderSwap.swift`.
+
+<Steps>
+<Step>
+### Add the package
+
+File, Add Package Dependencies in Xcode, or in `Package.swift`:
+
+```swift title="Package.swift"
+.package(url: "https://github.com/zaidmukaddam/swift-ai-sdk", branch: "main")
+```
+
+Add the `AI` product to your target and `import AI` where you use it.
+</Step>
+
+<Step>
+### Pick a model
+
+Any provider works; the key comes from the environment or an `apiKey:`
+argument. For zero setup, use Ollama on your Mac:
+
+```swift
+let model = AnthropicModel("claude-sonnet-5")                  // ANTHROPIC_API_KEY
+// or, no key needed:
+let local = OpenAICompatibleProvider.ollama()("granite4.1:3b")
+```
+</Step>
+
+<Step>
+### Generate
+
+One call, whole answer:
+
+```swift
+let result = try await generateText(
+  model: model,
+  system: "You are concise.",
+  prompt: "Name three primary colors."
+)
+print(result.text)
+print("tokens: \(result.usage.totalTokens)")
+```
+</Step>
+
+<Step>
+### Stream instead
+
+Same call, tokens as they arrive. Nothing runs until you iterate, and
+dropping the stream cancels the request:
+
+```swift
+let result = streamText(model: model, prompt: "Write a haiku about Swift.")
+for try await delta in result.textStream {
+  print(delta, terminator: "")
+}
+```
+
+`result.fullStream` carries everything else too: step boundaries, tool
+calls, usage.
+</Step>
+</Steps>
+
+## Final code
+
+```swift title="FirstRequest.swift"
+import AI
+
+func generateOnce() async throws {
+  let model = AnthropicModel("claude-sonnet-5")
+
+  let result = try await generateText(
+    model: model,
+    system: "You are concise.",
+    prompt: "Name three primary colors."
+  )
+  print(result.text)
+  print("tokens: \(result.usage.totalTokens)")
+}
+
+func streamIt() async throws {
+  let model = AnthropicModel("claude-sonnet-5")
+
+  let result = streamText(model: model, prompt: "Write a haiku about Swift.")
+  for try await delta in result.textStream {
+    print(delta, terminator: "")
+  }
+}
+
+func watchTheLoop() async throws {
+  let model = AnthropicModel("claude-sonnet-5")
+
+  for try await part in streamText(model: model, prompt: "Hi!").fullStream {
+    switch part {
+    case .textDelta(let delta): print(delta, terminator: "")
+    case .finishStep(let step): print("\n[step done: \(step.finishReason)]")
+    case .finish(let reason, let usage): print("[\(reason), \(usage.totalTokens) tokens]")
+    default: break
+    }
+  }
+}
+```
+
+## Swapping providers
+
+The same code runs against every provider. Change the model value, keep
+everything else:
+
+```swift title="ProviderSwap.swift"
+let models: [any LanguageModel] = [
+  AnthropicModel("claude-opus-4-8"),                       // ANTHROPIC_API_KEY
+  OpenAIModel("gpt-5.6-sol"),                              // OPENAI_API_KEY
+  XaiModel("grok-4.5"),                                    // XAI_API_KEY
+  GroqModel("llama-3.3-70b-versatile"),                    // GROQ_API_KEY
+  GoogleModel("gemini-3.5-flash"),                         // GOOGLE_GENERATIVE_AI_API_KEY
+  OpenAICompatibleProvider.ollama()("llama3.3")            // local, no key
+]
+
+for model in models.prefix(3) {
+  let result = try await generateText(model: model, prompt: "Say hi in 3 words.")
+  print("\(model.provider)/\(model.modelID): \(result.text)")
+}
+```
+
+A self-hosted gateway is four lines:
+
+```swift
+let gateway = OpenAICompatibleProvider(
+  name: "my-gateway",
+  baseURL: URL(string: "https://llm.your-company.com/v1")!,  // your gateway's URL
+  apiKey: ProcessInfo.processInfo.environment["GATEWAY_KEY"],
+  headers: ["x-team": "ios"]
+)
+let model = gateway("my-model")
+```

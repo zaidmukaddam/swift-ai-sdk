@@ -1,0 +1,62 @@
+---
+title: Embeddings and reranking
+description: embed, embedMany, cosine similarity, and rerank.
+icon: Network
+---
+
+## Embedding a value
+
+```swift
+let model = OpenAIEmbeddingModel("text-embedding-3-small")
+
+let result = try await embed(model: model, value: "sunny day at the beach")
+result.embedding      // [Double]
+result.usage          // token accounting
+```
+
+## Embedding many values
+
+`embedMany` batches automatically; pass `maxBatchSize` to respect a
+provider's limit and it splits the requests for you:
+
+```swift
+let result = try await embedMany(
+  model: model,
+  values: documents,
+  maxBatchSize: 96
+)
+result.embeddings     // one vector per input, in order
+```
+
+## Similarity
+
+```swift
+let query = try await embed(model: model, value: "coastal weather")
+
+let ranked = zip(documents, result.embeddings)
+  .map { document, vector in
+    (document, cosineSimilarity(query.embedding, vector))
+  }
+  .sorted { $0.1 > $1.1 }
+```
+
+Cohere embeddings plug in through `CohereEmbeddingModel` with the same
+calls.
+
+## Reranking
+
+When you already have candidates, a reranker orders them by relevance in
+one call instead of N similarity computations:
+
+```swift
+let result = try await rerank(
+  model: CohereRerankingModel("rerank-v4-fast"),
+  query: "warm places in january",
+  documents: candidates,
+  topN: 5
+)
+
+for ranked in result.rankedDocuments {
+  print(String(format: "%.3f", ranked.relevanceScore), ranked.document)
+}
+```

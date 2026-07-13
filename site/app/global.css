@@ -1,0 +1,112 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+:root {
+  /* Strong ease-out: built-in curves are too weak for UI motion. */
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --card-ring: oklch(0 0 0 / 0.07);
+  --card-shadow-low: oklch(0 0 0 / 0.04);
+  --card-shadow-high: oklch(0 0 0 / 0.1);
+
+  /* Swift orange (#F05138) as the accent across the docs: active nav,
+     links, TOC, focus rings. */
+  --color-fd-primary: oklch(0.65 0.199 31.6);
+  --color-fd-primary-foreground: oklch(1 0 0);
+  --color-fd-ring: oklch(0.65 0.199 31.6);
+}
+
+.dark {
+  --card-ring: oklch(1 0 0 / 0.1);
+  --card-shadow-low: oklch(0 0 0 / 0.3);
+  --card-shadow-high: oklch(0 0 0 / 0.5);
+
+  /* Coral (#FA7343) reads better on dark; near-black text on top of it. */
+  --color-fd-primary: oklch(0.709 0.177 39.5);
+  --color-fd-primary-foreground: oklch(0.205 0 0);
+  --color-fd-ring: oklch(0.709 0.177 39.5);
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  /* A missing weight should fail visibly, not render as a faked bold. */
+  font-synthesis: none;
+}
+
+/* Swift-orange selection: the accent follows you into the text. */
+::selection {
+  background: oklch(0.65 0.199 31.6);
+  color: oklch(1 0 0);
+}
+
+/* Prose links pick up the accent; cards and nav keep their own styling.
+   Underline metrics come from the font instead of browser guesses. */
+.prose :is(p, li, td) > a:not(:has(code)) {
+  color: var(--color-fd-primary);
+  text-decoration-color: color-mix(in oklab, var(--color-fd-primary) 50%, transparent);
+  text-underline-position: from-font;
+  text-decoration-thickness: from-font;
+}
+
+html > body[data-scroll-locked] {
+  margin-right: 0px !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}
+
+/* Depth from layered shadows instead of hard borders: a hairline ring, a
+   tight contact shadow, and a soft ambient one. */
+.card-surface {
+  box-shadow:
+    0 0 0 1px var(--card-ring),
+    0 1px 2px var(--card-shadow-low),
+    0 12px 32px -16px var(--card-shadow-high);
+}
+
+/* First-visit hero entrance: small, staggered, and gone under reduced
+   motion. Landing heroes are rare-view, so a gentle reveal earns its place. */
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-enter {
+  opacity: 0;
+  animation: hero-rise 500ms var(--ease-out-strong) forwards;
+}
+
+.hero-enter-1 {
+  animation-delay: 0ms;
+}
+.hero-enter-2 {
+  animation-delay: 60ms;
+}
+.hero-enter-3 {
+  animation-delay: 120ms;
+}
+.hero-enter-4 {
+  animation-delay: 180ms;
+}
+.hero-enter-5 {
+  animation-delay: 260ms;
+}
+.hero-enter-6 {
+  animation-delay: 340ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-enter {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}

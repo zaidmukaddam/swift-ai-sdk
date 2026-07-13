@@ -1,0 +1,33 @@
+---
+title: Agent skill
+description: Teach your coding agent to build with swift-ai-sdk.
+icon: Sparkles
+---
+
+If you build with an AI coding agent — Claude Code, Cursor, and the like —
+install the swift-ai-sdk skill. It hands the agent the API surface, the patterns,
+and a per-topic reference tree, so it writes correct swift-ai-sdk code instead of
+guessing from memory.
+
+## Install
+
+```bash
+npx skills add zaidmukaddam/swift-ai-sdk
+```
+
+Or copy the `skills/swift-ai-sdk/` folder from the repo into your project's
+`.claude/skills/` (or wherever your agent loads skills).
+
+## What's inside
+
+A `SKILL.md` router plus a `references/` tree — one file per topic, so the agent
+opens only what the task needs:
+
+- Text generation, structured output, and the Schema DSL
+- Tools, provider-executed tools, and agents (loop control, `prepareCall`, `toolOrder`)
+- Providers, reasoning, and middleware (including the cache)
+- Chat UI, transport, realtime voice
+- Media, on-device models, testing, and errors
+
+It mirrors these docs and is verified against the source, so it stays accurate as
+the SDK moves.

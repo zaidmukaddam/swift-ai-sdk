@@ -1,0 +1,95 @@
+---
+title: Changelog
+description: What shipped in each release of swift-ai-sdk.
+icon: History
+---
+
+<Steps>
+
+<Step>
+### 0.1.0
+
+The first release. A Swift port of the Vercel AI SDK for iOS and macOS.
+
+#### Core
+
+- `generateText` and `streamText`, with the tool-calling loop, steps, and
+  streamed reasoning.
+- Structured output: `generateObject`, `streamObject` (plus `elementStream`
+  for arrays), `generateEnum`, and `generateJSON`.
+- `embed`, `embedMany`, `cosineSimilarity`, and `rerank`.
+- A `Schema` DSL that validates arguments and output before decoding.
+- `ReasoningEffort` maps to each provider's native reasoning controls;
+  reasoning streams as `.reasoningDelta`.
+
+#### Agents and tools
+
+- `Agent`, the `ToolLoopAgent` analog: a model bundled with instructions,
+  tools, and loop settings. Also works as a `ChatTransport`.
+- Loop control (`stopWhen`, `stepCountIs`, `hasToolCall`), plus
+  `prepareCall`, `prepareStep`, and `toolOrder`.
+- Closure-based `Tool` with typed arguments, execution context, approvals,
+  and client-side tools.
+- Subagents: any `Agent` becomes a tool via `asTool`.
+- Provider-defined (server-executed) tools with typed builders under
+  `<Model>.Tools` for xAI, OpenAI, Google, and Anthropic — web and X
+  search, code execution, file search, computer use, and more. Calls and
+  results come back as provider-executed `.toolCall` / `.toolResult` parts,
+  and Anthropic's required beta headers are added for you.
+- MCP tools over HTTP via `MCPClient`.
+
+#### Providers
+
+Native packs that speak each provider's own wire:
+
+- `OpenAIModel` (Responses and `.chat`), `AnthropicModel`, `GoogleModel`,
+  `GoogleVertexModel`, `AzureOpenAIProvider`, `BedrockModel`, `XaiModel`
+  (with typed `SearchParameters` live search), `GroqModel`,
+  `DeepSeekModel`, `MistralModel`, `PerplexityModel`, `CohereModel`.
+- `OpenAICompatibleProvider` factories for Together, Fireworks, Cerebras,
+  OpenRouter, DeepInfra, Baseten, Vercel, Gateway, Ollama, LM Studio, and
+  Sarvam.
+- Sarvam: `sarvam-30b` / `sarvam-105b` reasoning chat, `SarvamSpeechModel`
+  (Bulbul), and `SarvamTranscriptionModel` (Saaras) for Indian languages.
+- `ProviderRegistry` and `customProvider` for `"provider:model"` strings
+  and aliases.
+
+#### Middleware
+
+- `wrapLanguageModel` with `extractReasoning`, `simulateStreaming`,
+  `defaultSettings`, and `cache` (backed by `LanguageModelCache`; ships an
+  in-process `InMemoryLanguageModelCache`).
+- Hooks: `transformRequest`, `wrapStream`, and `wrapCall` (wrap the whole
+  call and decide whether to run the model).
+
+#### Media
+
+- Images: OpenAI, fal, Luma, Replicate.
+- Speech: OpenAI, ElevenLabs, LMNT, Hume, Deepgram, Sarvam.
+- Transcription: OpenAI, ElevenLabs, Deepgram, AssemblyAI, Rev.ai, Gladia,
+  Sarvam.
+- Video: xAI, Luma.
+
+#### UI and realtime
+
+- `ChatSession`, `CompletionSession`, and `ObjectSession` as `@Observable`
+  objects for SwiftUI.
+- The UI-message stream protocol, wire-compatible with the AI SDK's
+  `/api/chat` route: `ChatTransport`, `HTTPChatTransport`,
+  `LocalChatTransport`, `readUIMessageStream`, message metadata, and stream
+  resumption.
+- Realtime voice over WebSockets — OpenAI, Google (Gemini Live), and xAI —
+  through `RealtimeSession`.
+
+#### On-device
+
+- `FoundationModelsModel` runs Apple Intelligence through the same API as
+  the cloud providers, with nothing leaving the device.
+
+#### Tooling
+
+- `AITelemetry` spans, structured `AIError`, and testing helpers in the
+  `AITesting` module.
+</Step>
+
+</Steps>

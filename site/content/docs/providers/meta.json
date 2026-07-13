@@ -1,0 +1,24 @@
+{
+  "title": "Providers",
+  "root": true,
+  "description": "Every pack, its setup, features, and models.",
+  "icon": "Cable",
+  "pages": [
+    "index",
+    "compatibility",
+    "openai",
+    "anthropic",
+    "google",
+    "azure",
+    "bedrock",
+    "xai",
+    "groq",
+    "deepseek",
+    "mistral",
+    "perplexity",
+    "cohere",
+    "sarvam",
+    "openai-compatible",
+    "media"
+  ]
+}

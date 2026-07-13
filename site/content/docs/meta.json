@@ -1,0 +1,29 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "index",
+    "getting-started",
+    "agent-skill",
+    "guides",
+    "---Core---",
+    "generating-text",
+    "messages",
+    "structured-output",
+    "tools",
+    "agents",
+    "reasoning",
+    "providers",
+    "on-device",
+    "---UI---",
+    "chat-ui",
+    "streaming-protocol",
+    "realtime",
+    "---Beyond text---",
+    "embeddings",
+    "media",
+    "---More---",
+    "advanced",
+    "testing",
+    "changelog"
+  ]
+}

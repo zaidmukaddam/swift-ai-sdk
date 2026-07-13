@@ -1,0 +1,104 @@
+---
+title: Streaming protocol
+description: The UI message stream on the wire, and the server-side builders.
+icon: Waves
+---
+
+Chat UIs on the web stream messages as SSE frames of typed JSON chunks,
+terminated by `data: [DONE]`. swift-ai-sdk speaks that exact protocol on both
+ends: sessions consume it, and the server helpers on this page produce
+it. If you already have a chat route, the app plugs into it; if you're
+writing a Swift server, your web frontend plugs into you.
+
+## Serving a stream
+
+`UIMessageStream.chunks` bridges the generation loop onto protocol chunks,
+the `toUIMessageStreamResponse` analog for Swift servers (Vapor, Hummingbird,
+or anything that writes SSE):
+
+```swift title="ChatRoute.swift"
+let result = streamText(model: model, messages: messages, tools: tools)
+let chunks = UIMessageStream.chunks(from: result.fullStream)
+
+response.headers = UIMessageStream.headers
+for try await chunk in chunks {
+  try await response.write(UIMessageStream.encodeSSE(chunk))
+}
+try await response.write(UIMessageStream.doneSSE)
+```
+
+## Building streams by hand
+
+`UIMessageStream.build` is the `createUIMessageStream` analog: write
+arbitrary chunks and merge whole generation streams into one response.
+
+```swift
+let stream = UIMessageStream.build { writer in
+  writer.write(.data(name: "data-status", data: .string("searching")))
+
+  let result = streamText(model: model, prompt: prompt)
+  writer.merge(UIMessageStream.chunks(from: result.fullStream))
+}
+```
+
+The stream stays open until the body returns and every merged stream
+drains; errors surface as in-band `error` chunks.
+
+## Message metadata
+
+Attach values at start and stream updates as the loop progresses; the
+client deep-merges every update into `UIMessage.metadata`:
+
+```swift
+UIMessageStream.chunks(
+  from: result.fullStream,
+  metadata: ["model": .string("claude-sonnet-5")],
+  messageMetadata: { part in
+    if case .finish(_, let usage) = part {
+      return ["totalTokens": .number(Double(usage.totalTokens))]
+    }
+    return nil
+  }
+)
+```
+
+## Reading streams
+
+`readUIMessageStream` consumes any chunk stream as a sequence of
+`UIMessage` snapshots, one per applied chunk, without a `ChatSession`.
+Useful for persistence pipelines and server-side processing:
+
+```swift
+for try await snapshot in readUIMessageStream(chunks) {
+  render(snapshot)
+}
+```
+
+## Converting to model messages
+
+`convertToModelMessages` turns client `UIMessage` state into the model
+history, including file parts (data URLs decode to inline bytes), settled
+tool calls with their results, and approval responses for the loop to
+resolve.
+
+## Chunk reference
+
+The chunk types on the wire, for anyone implementing a server or
+debugging frames:
+
+| Chunk | Purpose |
+| --- | --- |
+| `start`, `finish`, `abort` | Message lifecycle; `start` carries the id and metadata |
+| `start-step`, `finish-step` | Loop step boundaries |
+| `text-start`, `text-delta`, `text-end` | Streamed text, framed by part id |
+| `reasoning-start/-delta/-end` | Streamed thinking |
+| `tool-input-start`, `tool-input-delta`, `tool-input-available` | A tool call assembling |
+| `tool-output-available`, `tool-output-error`, `tool-output-denied` | Its result |
+| `tool-approval-request` | Human-in-the-loop pause |
+| `source-url`, `source-document` | Citations |
+| `data-*` | Your custom data parts |
+| `message-metadata` | Deep-merged metadata updates |
+| `error` | In-band errors |
+
+A Swift server and a TypeScript client, or the reverse, agree on every
+one of these byte for byte.

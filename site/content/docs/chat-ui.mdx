@@ -1,0 +1,147 @@
+---
+title: Chat UI
+description: ChatSession, CompletionSession, and ObjectSession for SwiftUI.
+icon: MessageSquare
+---
+
+A chat screen needs three things: a message list that updates as tokens
+arrive, a way to send, and a status for the spinner. `ChatSession` is all
+three in one `@Observable` object you keep in `@State`. Two siblings
+cover the smaller cases: `CompletionSession` for single-turn text and
+`ObjectSession` for streamed structured output.
+
+## ChatSession
+
+```swift title="ChatView.swift"
+@State private var chat = ChatSession(
+  // Your server's chat route — the same one a web `useChat` app calls.
+  transport: HTTPChatTransport(api: URL(string: "https://your-app.com/api/chat")!)
+)
+
+// in the view:
+ForEach(chat.messages) { message in
+  MessageView(message: message)     // UIMessage: text, reasoning, tools, files
+}
+Button("Send") { chat.send(input) }
+```
+
+`chat.status` drives spinners (`submitted`, `streaming`, `ready`, `error`;
+`isLoading` folds the first two), `chat.stop()` cancels,
+`chat.regenerate()` replays, and messages arrive as `UIMessage` values
+whose parts update token by token.
+
+A few more pieces worth knowing: `send(_:)` is sugar for
+`sendMessage(.user(text))` — build a `UIMessage` yourself to attach file
+parts or metadata; `setMessages(_:)` hydrates a persisted conversation;
+the session takes an `id:` so reconnects and resumption target the right
+chat. `HTTPChatTransport` accepts `headers:` (auth) and a `body:` object
+merged into every request alongside the messages.
+
+The wire format is the same UI message stream your web chat already
+speaks, so an existing chat route serves the app without changes.
+
+### What that URL points to
+
+The `api:` URL is an AI SDK chat route — a POST endpoint that takes
+`{messages}` and streams UI message chunks. If you don't have one yet,
+it's ~15 lines on any framework the AI SDK supports:
+
+```ts title="app/api/chat/route.ts"
+import {
+  streamText, UIMessage, convertToModelMessages,
+  createUIMessageStreamResponse, toUIMessageStream,
+} from 'ai';
+
+export async function POST(req: Request) {
+  const { messages }: { messages: UIMessage[] } = await req.json();
+
+  const result = streamText({
+    model: 'anthropic/claude-sonnet-5',
+    messages: await convertToModelMessages(messages),
+  });
+
+  return createUIMessageStreamResponse({
+    stream: toUIMessageStream({ stream: result.stream }),
+  });
+}
+```
+
+Serving from Swift instead? The
+[streaming protocol page](/docs/streaming-protocol) builds the same
+route with this library's server helpers. No backend at all? Use a
+[local transport](#local-transports).
+
+## UIMessage anatomy
+
+A `UIMessage` is an id, a role, optional metadata, and typed parts you
+switch over when rendering:
+
+| Part | Renders as |
+| --- | --- |
+| `.text(TextUIPart)` | Assistant or user text; `state` is `streaming` or `done` |
+| `.reasoning(ReasoningUIPart)` | Thinking, streamed the same way |
+| `.tool(ToolUIPart)` | A tool call with its lifecycle state |
+| `.sourceURL` / `.sourceDocument` | Citations |
+| `.file(FileUIPart)` | Attachments (data URLs or remote) |
+| `.data(DataUIPart)` | Custom data parts your server writes |
+| `.stepStart` | A step boundary marker |
+
+Tool parts walk a state machine you can render precisely:
+`inputStreaming` while arguments stream, `inputAvailable` once callable,
+`outputAvailable` or `outputError` after execution, and
+`approvalRequested`, `approvalResponded`, `outputDenied` for
+human-in-the-loop flows.
+
+```swift
+case .tool(let tool):
+  switch tool.state {
+  case .inputStreaming: ToolSpinner(name: tool.toolName)
+  case .approvalRequested: ApprovalPrompt(tool: tool)
+  case .outputAvailable: ToolResultView(output: tool.output)
+  default: EmptyView()
+  }
+```
+
+## Tool results and approvals
+
+Client-side tools and human-in-the-loop approvals ride the protocol:
+
+```swift
+chat.addToolResult(toolCallID: id, result: ["status": "done"])
+chat.addToolApprovalResponse(approvalID: id, approved: true)
+```
+
+## Resuming interrupted streams
+
+`HTTPChatTransport` implements the standard reconnect contract
+(`GET {api}/{chatId}/stream`); call `chat.resumeStream()` when the app
+comes back to the foreground to pick up a response that kept generating
+while it was away.
+
+## Local transports
+
+Every session also runs against an in-process model with no server:
+
+```swift
+let chat = ChatSession(model: FoundationModelsModel(), tools: [weather])
+let completion = CompletionSession(model: AnthropicModel("claude-sonnet-5"))
+```
+
+Any `Agent` is a transport too, which is the usual way to get tools into a
+local chat.
+
+## CompletionSession and ObjectSession
+
+```swift
+@State var completion = CompletionSession(
+  transport: HTTPCompletionTransport(api: url)
+)
+completion.complete("Write a tagline for a coffee shop")
+// completion.completion grows as tokens arrive
+
+@State var object = ObjectSession(
+  transport: HTTPObjectTransport(api: url)
+)
+object.submit("Generate a recipe")
+let recipe: Recipe? = object.decoded()   // partial-JSON repaired as it streams
+```

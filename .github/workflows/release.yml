@@ -1,0 +1,42 @@
+name: Release
+
+# Publishes a GitHub Release when a SemVer tag is pushed (e.g. `0.1.0`,
+# `0.2.0-beta.1`). The tag itself is what Swift Package Manager resolves;
+# this workflow gates it on a green build and creates the human-facing release.
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+-*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app || true
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body: |
+            See the [changelog](https://swift-ai-sdk.dev/docs/changelog) for what shipped in this release.
+
+            Add to your project:
+
+            ```swift
+            .package(url: "https://github.com/zaidmukaddam/swift-ai-sdk.git", from: "${{ github.ref_name }}")
+            ```

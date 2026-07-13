@@ -1,0 +1,55 @@
+---
+title: Groq
+description: Fast open models on the chat-completions wire, with reasoning deltas.
+---
+
+```swift
+let model = GroqModel("llama-3.3-70b-versatile")
+```
+
+Key from `GROQ_API_KEY`; base URL `https://api.groq.com/openai/v1`.
+
+## Features
+
+- Rides the shared chat-completions wire: tools, structured output, and
+  vision are encoded for any model that honors them.
+- Reasoning models stream thinking as `.reasoningDelta`.
+- Usage arrives in Groq's `x_groq` envelope, including
+  `cachedInputTokens` for prompt-cache hits.
+- The `reasoning` parameter maps to `reasoning_effort`; `.xhigh`
+  coerces to `high`.
+- Models that emit inline `<think>` blocks instead of structured
+  reasoning pair well with the
+  [extractReasoning middleware](/docs/advanced#middleware).
+
+## Models
+
+Groq hosts open models rather than training its own line. The catalog
+as of July 2026 (from `console.groq.com/docs/models`):
+
+| Model | Notes |
+| --- | --- |
+| `llama-3.3-70b-versatile` | Production workhorse, 131k context |
+| `llama-3.1-8b-instant` | 560 tokens/sec, 131k context |
+| `openai/gpt-oss-120b` | OpenAI's open-weights reasoner, ~500 tokens/sec |
+| `openai/gpt-oss-20b` | Smaller gpt-oss, ~1000 tokens/sec |
+| `groq/compound`, `groq/compound-mini` | Agentic systems with built-in web search and code execution |
+| `meta-llama/llama-4-scout-17b-16e-instruct` | Preview |
+| `qwen/qwen3.6-27b`, `qwen/qwen3-32b` | Preview |
+
+The catalog rotates — whatever the console lists, the pack speaks.
+
+Groq also serves Whisper on the OpenAI-shaped transcription endpoint,
+so the transcription pack points there directly:
+
+```swift
+let transcript = try await transcribe(
+  model: OpenAITranscriptionModel(
+    "whisper-large-v3-turbo",
+    apiKey: groqKey,
+    baseURL: URL(string: "https://api.groq.com/openai/v1")!
+  ),
+  audio: audioData,
+  mediaType: "audio/mpeg"
+)
+```

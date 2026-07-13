@@ -1,0 +1,89 @@
+---
+title: Anthropic
+description: The Messages API with adaptive thinking, tool use, vision, and prompt caching.
+---
+
+```swift
+let model = AnthropicModel("claude-fable-5")     // or claude-sonnet-5
+```
+
+Key from `ANTHROPIC_API_KEY`; base URL `https://api.anthropic.com/v1`.
+
+## Features
+
+- Tools, vision, and PDF documents as message parts.
+- Structured output rides a forced tool call — Claude has no JSON mode,
+  so `generateObject` defines a tool whose arguments are your schema and
+  forces the model to call it.
+- Thinking streams as `.reasoningDelta`; the `reasoning` parameter
+  translates per model tier (below).
+- `usage.cachedInputTokens` is populated on prompt-cache hits.
+- Anthropic-native fields (`thinking`, cache-control blocks) go through
+  `providerOptions` and win over anything the library sets.
+
+## Server-side tools
+
+Anthropic's built-in tools have typed builders under
+`AnthropicModel.Tools` — `webSearch`, `webFetch`, `codeExecution`,
+`bash`, `textEditor`, `computer(displayWidthPx:displayHeightPx:)`, and
+`memory`. Pass them in `tools:`; the required `anthropic-beta` flags are
+added to the request for you:
+
+```swift
+let result = try await generateText(
+  model: AnthropicModel("claude-sonnet-5"),
+  prompt: "Search the web and summarize what's new.",
+  tools: [AnthropicModel.Tools.webSearch(maxUses: 3)]
+)
+```
+
+Each builder takes a `version:` for the dated tool variants
+(`web_search_20250305`, `computer_20250124`, ...); the defaults track
+the current stable release.
+
+## Models
+
+| Models | Output ceiling | `reasoning` becomes |
+| --- | --- | --- |
+| Sonnet 5, Fable 5, Opus 4.7 / 4.8 | 128k | Adaptive thinking + `output_config.effort`, up to `xhigh` |
+| Sonnet 4.6, Opus 4.6 | 128k | Adaptive thinking (`xhigh` coerces to `max`) |
+| Sonnet 4.5, Opus 4.5, Haiku 4.5, Sonnet 4.x | 64k | `thinking.budget_tokens` from the ceiling |
+| Opus 4.1, Opus 4.x | 32k | `thinking.budget_tokens` from the ceiling |
+| Anything else | 4,096 | `thinking.budget_tokens`, conservative ceiling |
+
+`.none` sends `thinking.type: "disabled"` explicitly, and `max_tokens`
+is raised automatically when a budget would not fit.
+
+### Current lineup
+
+Snapshot from July 2026, newest first. Anthropic's native ids use
+dashes (`claude-opus-4-8`); date-stamped variants
+(`claude-sonnet-4-5-20250929`) work too.
+
+| Model | Released |
+| --- | --- |
+| `claude-fable-5` | July 2026 |
+| `claude-sonnet-5` | June 2026 |
+| `claude-opus-4-8` | May 2026 |
+| `claude-opus-4-7` | April 2026 |
+| `claude-sonnet-4-6`, `claude-opus-4-6` | February 2026 |
+| `claude-opus-4-5` | November 2025 |
+| `claude-haiku-4-5` | October 2025 |
+| `claude-sonnet-4-5` | September 2025 |
+| `claude-opus-4-1`, `claude-sonnet-4` | 2025 |
+| `claude-3-5-haiku` | Budget tier |
+
+## Files and skills
+
+```swift
+let upload = try await AnthropicFiles().upload(
+  data: pdf, filename: "report.pdf", mediaType: "application/pdf"
+)
+
+let skill = try await AnthropicSkills().upload(
+  files: [SkillFile(path: "brand-guide/SKILL.md", data: skillMD)],
+  displayTitle: "Brand guide"
+)
+```
+
+Beta headers are handled for you on both.

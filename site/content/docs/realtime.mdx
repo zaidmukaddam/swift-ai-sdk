@@ -1,0 +1,170 @@
+---
+title: Realtime voice
+description: Live speech conversations over WebSockets with OpenAI, Google, and xAI.
+icon: AudioWaveform
+---
+
+`RealtimeSession` is the `useRealtime` analog: an observable session for
+bidirectional voice over WebSockets. Three providers speak their native
+wires behind one `RealtimeModel` protocol: `OpenAIRealtimeModel`,
+`GoogleRealtimeModel` (Gemini Live), and `XaiRealtimeModel` (Grok voice).
+
+## Token flow
+
+Realtime connections authenticate with short-lived client secrets. Your
+server mints one with the API key; the app connects with the secret, so
+the key never ships:
+
+```swift title="TokenRoute.swift"
+// Server side
+let model = XaiRealtimeModel("grok-voice-latest")
+let secret = try await model.createClientSecret(
+  options: RealtimeClientSecretOptions(
+    expiresAfterSeconds: 300,
+    sessionConfig: config
+  )
+)
+// return {token, url, expiresAt} to the app
+```
+
+The session can also fetch from a setup endpoint directly:
+`try await session.connect(tokenEndpoint: url)`. The endpoint returns
+`{token, url, tools}` and any tool definitions it includes join the
+session automatically.
+
+## A voice session
+
+```swift title="VoiceView.swift"
+let session = RealtimeSession(
+  model: XaiRealtimeModel("grok-voice-latest"),
+  sessionConfig: RealtimeSessionConfig(
+    instructions: "You are a concise voice assistant.",
+    inputAudioTranscription: .init(),
+    turnDetection: .init(type: .serverVAD)
+  ),
+  onToolCall: { call in
+    call.name == "getTime" ? .string(currentTime()) : nil
+  }
+)
+
+session.connect(secret: secret)
+session.sendText("Hello!")
+```
+
+`session.messages` renders the conversation as regular `UIMessage` values:
+streamed transcripts, your speech transcribed and inserted where the audio
+was committed, and tool parts.
+
+## Audio is yours
+
+The app owns capture and playback, which is where native shines: real
+AVAudioEngine, not a browser tab asking for mic permission.
+
+```swift
+// Speak: microphone PCM in (16-bit, 24 kHz by default)
+session.sendAudio(microphoneChunk)
+
+// Listen: decoded PCM out, feed your AVAudioEngine player
+for await chunk in session.audioOutput { player.play(chunk) }
+
+// Barge-in: report how much was heard so the model's context truncates
+session.playbackInterrupted(playedMilliseconds: player.playedMilliseconds)
+```
+
+## Session configuration
+
+`RealtimeSessionConfig` is provider-neutral; each model maps it onto its
+native session payload:
+
+```swift
+RealtimeSessionConfig(
+  instructions: "You are a concise voice assistant.",
+  voice: "marin",
+  outputModalities: ["audio"],                 // or ["text"]
+  inputAudioFormat: .init(type: "audio/pcm", rate: 24_000),
+  inputAudioTranscription: .init(model: nil, language: "en", prompt: nil),
+  outputAudioTranscription: .init(),
+  outputAudioFormat: .init(type: "audio/pcm", rate: 24_000),
+  turnDetection: .init(type: .serverVAD),
+  tools: getRealtimeToolDefinitions(tools: [approve]),
+  providerOptions: nil                         // merged into the native payload
+)
+```
+
+Audio format types are `audio/pcm` (16-bit, with a `rate`),
+`audio/pcmu`, and `audio/pcma`. Setting `inputAudioTranscription` is
+what makes your speech come back as `inputTranscriptionCompleted`
+events, which the session inserts as user messages at the point the
+audio was committed; `outputAudioTranscription` gives you the model's
+spoken words as streaming text.
+
+### Turn detection
+
+```swift
+turnDetection: .init(
+  type: .serverVAD,          // or .semanticVAD, .disabled
+  threshold: 0.5,            // VAD activation, 0.0 to 1.0
+  silenceDurationMs: 500,    // silence before the server ends your turn
+  prefixPaddingMs: 300       // audio kept from before speech started
+)
+```
+
+`.semanticVAD` ends turns on meaning rather than silence where the
+provider supports it (xAI maps it to server VAD). `.disabled` is
+push-to-talk: stream audio, then call `session.commitAudio()` to end
+your turn yourself.
+
+## Client-side tools
+
+Realtime tool execution is client-driven. Register definitions with
+`getRealtimeToolDefinitions(tools:)` in the session config, execute in
+`onToolCall`, or return nil and submit later:
+
+```swift
+session.addToolOutput(callID: call.id, output: .object(["approved": .bool(true)]))
+```
+
+On multi-tool turns the session requests exactly one follow-up response,
+after the turn closes and every output is in.
+
+## Events
+
+Every normalized server event is available on `session.events` and through
+`onEvent`, with the raw provider payload attached for anything
+provider-specific. The full set:
+
+| Event | Meaning |
+|---|---|
+| `sessionCreated` / `sessionUpdated` | Socket is live; config acknowledged. |
+| `speechStarted` / `speechStopped` | Server VAD heard you start and stop. |
+| `audioCommitted` | Your audio became a conversation item. |
+| `conversationItemAdded` | Any item joined the conversation. |
+| `inputTranscriptionCompleted` | Your speech, transcribed. |
+| `responseCreated` / `responseDone` | A model turn opened and closed. |
+| `outputItemAdded` / `outputItemDone` | An output item within the turn. |
+| `contentPartAdded` / `contentPartDone` | A content part within an item. |
+| `audioDelta` / `audioDone` | Base64 audio out (what `audioOutput` decodes). |
+| `audioTranscriptDelta` / `audioTranscriptDone` | The spoken response as text. |
+| `textDelta` / `textDone` | Text-modality output. |
+| `functionCallArgumentsDelta` / `...Done` | A tool call streaming in. |
+| `error` | Server-reported error with message and code. |
+| `custom(rawType:)` | Anything the provider sends that has no portable shape. |
+
+## Provider wire notes
+
+- **OpenAI** connects with the `realtime` and
+  `openai-insecure-api-key.{token}` WebSocket subprotocols and nests
+  audio config under `audio.input`/`audio.output`; input transcription
+  defaults to `gpt-realtime-whisper` when enabled.
+- **xAI** authenticates with a single `xai-client-secret.{token}`
+  subprotocol and uses a flat session shape (`response.text.*` events).
+- **Google (Gemini Live)** mints tokens against `v1alpha/auth_tokens`
+  and connects with the token as an `?access_token=` query parameter —
+  no subprotocols. The Live wire is stateful rather than event-per-item,
+  so the model maps `serverContent` frames onto the portable events and
+  synthesizes response ids. Google requires the session config at token
+  creation, which is why `RealtimeClientSecretOptions` carries a
+  `sessionConfig`.
+- Providers that send keepalive frames get them answered automatically:
+  a model can implement `healthCheckResponse(for:)` and the session
+  echoes whatever it returns.

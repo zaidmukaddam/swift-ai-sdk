@@ -1,0 +1,129 @@
+---
+title: Media and embeddings
+description: Images, speech, transcription, video, search, and reranking.
+---
+
+Covers `Examples/08-Embeddings.swift`, `12-ImageGeneration.swift`,
+`13-SpeechAndTranscription.swift`, `14-VideoGeneration.swift`, and
+`15-Rerank.swift`. Quick hits, one call each.
+
+<Steps>
+<Step>
+### Generate an image
+
+```swift
+let result = try await generateImage(
+  model: OpenAIImageModel("gpt-image-1"),
+  prompt: "A watercolor fox in a snowy forest",
+  size: "1024x1024"
+)
+try result.image.write(to: URL(fileURLWithPath: "/tmp/fox.png"))
+```
+</Step>
+
+<Step>
+### Say it out loud, then transcribe it back
+
+```swift
+let speech = try await generateSpeech(
+  model: OpenAISpeechModel("gpt-4o-mini-tts"),
+  text: "The quick brown fox jumped over the lazy dog.",
+  voice: "alloy"
+)
+try speech.audio.write(to: URL(fileURLWithPath: "/tmp/hello.mp3"))
+
+let transcript = try await transcribe(
+  model: OpenAITranscriptionModel("whisper-1"),
+  audio: try Data(contentsOf: URL(fileURLWithPath: "/tmp/hello.mp3")),
+  mediaType: "audio/mpeg"
+)
+print(transcript.text)
+```
+</Step>
+
+<Step>
+### Animate it
+
+```swift
+let still = try Data(contentsOf: URL(fileURLWithPath: "/tmp/fox.png"))
+let video = try await generateVideo(
+  model: XaiVideoModel("grok-video-1"),
+  prompt: "The fox blinks and snow falls gently",
+  image: ImageContent(data: still)
+)
+print(video.urls)
+```
+
+The provider polls the render job for you; the call returns when the
+clip is ready.
+</Step>
+
+<Step>
+### Search your own content
+
+Embeddings turn text into vectors; cosine similarity ranks them:
+
+```swift
+let model = OpenAIEmbeddingModel("text-embedding-3-small")
+
+func bestMatch(for query: String, in corpus: [String]) async throws -> String? {
+  let docs = try await embedMany(model: model, values: corpus)
+  let q = try await embed(model: model, value: query)
+
+  return zip(corpus, docs.embeddings)
+    .max { cosineSimilarity($0.1, q.embedding) < cosineSimilarity($1.1, q.embedding) }?
+    .0
+}
+```
+</Step>
+
+<Step>
+### Rerank when you already have candidates
+
+```swift
+let result = try await rerank(
+  model: CohereRerankingModel("rerank-v4-fast"),
+  query: "What is the capital of the United States?",
+  documents: documents,
+  topN: 2
+)
+for ranked in result.rankedDocuments {
+  print(String(format: "%.3f", ranked.relevanceScore), ranked.document)
+}
+```
+</Step>
+</Steps>
+
+## Final code
+
+```swift title="MediaPipeline.swift"
+import AI
+import Foundation
+
+func foxPipeline() async throws {
+  // 1. A picture
+  let image = try await generateImage(
+    model: OpenAIImageModel("gpt-image-1"),
+    prompt: "A watercolor fox in a snowy forest",
+    size: "1024x1024"
+  )
+  let stillURL = URL(fileURLWithPath: "/tmp/fox.png")
+  try image.image.write(to: stillURL)
+
+  // 2. A voice
+  let speech = try await generateSpeech(
+    model: OpenAISpeechModel("gpt-4o-mini-tts"),
+    text: "A fox in the snow.",
+    voice: "alloy"
+  )
+  try speech.audio.write(to: URL(fileURLWithPath: "/tmp/fox.mp3"))
+
+  // 3. A film
+  let video = try await generateVideo(
+    model: XaiVideoModel("grok-video-1"),
+    prompt: "The fox blinks and snow falls gently",
+    image: ImageContent(data: try Data(contentsOf: stillURL))
+  )
+  print("done:", video.urls)
+}
+```

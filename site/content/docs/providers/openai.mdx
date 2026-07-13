@@ -1,0 +1,78 @@
+---
+title: OpenAI
+description: Responses API by default, chat completions when you ask, plus embeddings, images, speech, transcription, and realtime.
+---
+
+```swift
+let model = OpenAIModel("gpt-5.6-sol")          // Responses API
+let chat  = OpenAIModel.chat("gpt-5.6-terra")   // chat completions wire
+```
+
+Key from `OPENAI_API_KEY`; base URL from `OPENAI_BASE_URL` or
+`https://api.openai.com/v1`. `organization:` and `project:` become the
+matching request headers.
+
+## Features
+
+- Tools, structured output (JSON schema mode), vision, and streamed
+  reasoning summaries (`response.reasoning_summary_text.delta` arrives
+  as `.reasoningDelta`).
+- URL citations surface as `StreamPart.source` and source-url parts in
+  chat UIs.
+- `usage.cachedInputTokens` reports prompt-cache hits.
+- Built-in Responses tools have typed builders under `OpenAIModel.Tools`
+  — `webSearch`, `webSearchPreview`, `fileSearch(vectorStoreIds:)`, and
+  `codeInterpreter`. Drop them in `tools:`; the calls and results stream
+  back as provider-executed parts and citations as `.source`:
+
+```swift
+let result = try await generateText(
+  model: OpenAIModel("gpt-5.6-sol"),
+  prompt: "What happened in tech today?",
+  tools: [OpenAIModel.Tools.webSearch()]
+)
+print(result.sources.map(\.url))
+```
+
+- Other Responses knobs (`store`, `instructions`, `include`,
+  `previous_response_id`) pass through `providerOptions`, merged at the
+  top level.
+
+## Models
+
+Any id the API serves works. The library special-cases:
+
+- **Reasoning models** — `o1*`, `o3*`, `o4-mini*`, and `gpt-5*` (except
+  `gpt-5-chat*`): the `reasoning` parameter maps to `reasoning.effort`
+  with an automatic detailed summary, and sampling knobs are dropped
+  where those models reject them.
+- **`gpt-5.1` through `gpt-5.6`** — accept `temperature`/`topP` again
+  when reasoning effort is `none`.
+
+### Current lineup
+
+Snapshot from July 2026; new ids work the day OpenAI ships them.
+
+| Model | Notes |
+| --- | --- |
+| `gpt-5.6-sol` / `gpt-5.6-terra` / `gpt-5.6-luna` | Newest family (July 2026): Sol is the flagship, Terra the balanced tier, Luna the fast one |
+| `gpt-5.5`, `gpt-5.5-pro` | April 2026 |
+| `gpt-5.4`, `-mini`, `-nano`, `-pro` | March 2026 workhorses |
+| `gpt-5.3-codex`, `gpt-5.2-codex` | Code-tuned |
+| `gpt-5.3-chat`, `gpt-5.2-chat` | Non-reasoning chat variants |
+| `gpt-5.2`, `gpt-5.1-thinking`, `gpt-5.1-instant` | Late 2025 |
+| `gpt-realtime-2.1`, `gpt-realtime-mini` | Realtime voice |
+| `gpt-image-2`, `gpt-image-1.5`, `gpt-image-1-mini` | Image generation and edits |
+| `text-embedding-3-large`, `text-embedding-3-small` | Embeddings |
+| `whisper-1`, `gpt-4o-mini-tts` | Transcription and speech |
+
+## Beyond text
+
+| Surface | Entry point |
+| --- | --- |
+| Embeddings | `OpenAIEmbeddingModel("text-embedding-3-small")` |
+| Images (generate + edit) | `OpenAIImageModel("gpt-image-1")` |
+| Speech | `OpenAISpeechModel("gpt-4o-mini-tts")` |
+| Transcription | `OpenAITranscriptionModel("whisper-1")` |
+| Realtime voice | `OpenAIRealtimeModel("gpt-realtime")` |
+| Files | `OpenAIFiles().upload(...)` |

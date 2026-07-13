@@ -1,0 +1,9 @@
+{
+  "title": "Changelog",
+  "root": true,
+  "icon": "History",
+  "description": "What shipped in each release.",
+  "pages": [
+    "index"
+  ]
+}

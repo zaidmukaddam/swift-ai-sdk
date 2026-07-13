@@ -1,0 +1,117 @@
+---
+title: xAI
+description: Grok over the Responses API, typed live search, video generation, and realtime voice.
+---
+
+```swift
+let model = XaiModel("grok-4.5")          // Responses API
+let chat  = XaiModel.chat("grok-3")       // legacy chat wire
+```
+
+Key from `XAI_API_KEY`; base URL `https://api.x.ai/v1`.
+
+## Features
+
+- Tools, structured output, vision, streamed reasoning, citations as
+  `StreamPart.source`, and cached-token usage.
+- Server-side live search is a typed option — `XaiModel.SearchParameters`
+  serializes to the `search_parameters` body field:
+
+```swift
+let search = XaiModel.SearchParameters(
+  mode: .auto,
+  returnCitations: true,
+  fromDate: "2026-07-01",
+  maxSearchResults: 10,
+  sources: [.web(country: "US"), .x(includedHandles: ["xai"]), .news()]
+)
+
+let result = try await generateText(
+  model: XaiModel("grok-4.5"),
+  prompt: "What happened in AI this week?",
+  providerOptions: search.providerOptions
+)
+```
+
+Per-source filters:
+`.web(country:excludedWebsites:allowedWebsites:safeSearch:)`,
+`.x(includedHandles:excludedHandles:postFavoriteCount:postViewCount:)`,
+`.news(country:excludedWebsites:safeSearch:)`.
+
+## Server-side tools
+
+On the Responses API, xAI can run tools for you. Pass the typed builders
+under `XaiModel.Tools` in `tools:` — the calls and results stream back as
+provider-executed parts, and citations as `.source`:
+
+```swift
+let result = try await generateText(
+  model: XaiModel("grok-4.5"),
+  prompt: "What did xAI announce this week?",
+  tools: [
+    XaiModel.Tools.webSearch(allowedDomains: ["x.ai"]),
+    XaiModel.Tools.xSearch(allowedXHandles: ["xai"], fromDate: "2026-07-01"),
+    XaiModel.Tools.codeExecution(),
+  ]
+)
+```
+
+Builders: `webSearch`, `xSearch`, `codeExecution`,
+`fileSearch(vectorStoreIds:)`, `mcpServer(serverUrl:)`, `viewImage`,
+`viewXVideo`. `SearchParameters` above is the older `search_parameters`
+knob; `Tools` is the provider-executed path that surfaces each call and
+its result.
+
+### Multi-agent
+
+`grok-4.20-multi-agent` runs a research swarm server-side. It's just a
+model id plus the three server-side tools — pass them by whatever names
+you want to reference in `activeTools`:
+
+```swift
+let result = streamText(
+  model: XaiModel("grok-4.20-multi-agent"),
+  system: "You are a research assistant in multi-agent mode.",
+  prompt: "What shipped across the AI labs this week?",
+  tools: [
+    XaiModel.Tools.webSearch(name: "xai_web_search"),
+    XaiModel.Tools.xSearch(name: "xai_x_search"),
+    XaiModel.Tools.codeExecution(name: "xai_code_execution"),
+  ],
+  toolChoice: .auto,
+  activeTools: ["xai_web_search", "xai_x_search", "xai_code_execution"]
+)
+```
+
+Each builder's `name:` sets the tool name the calls and results carry, so
+`activeTools` lines up with it. The agents' searches and code runs stream
+back as provider-executed `.toolCall` / `.toolResult` parts.
+
+## Models
+
+- The `reasoning` parameter maps to `reasoning.effort` (`.minimal`
+  coerces to `low`, `.xhigh` to `high`).
+- `grok-4.20` date-stamped `-reasoning` / `-non-reasoning` variants have
+  behavior baked into the model id, so the parameter is not sent for
+  them.
+
+### Current lineup
+
+As of July 2026, newest first:
+
+| Model | Notes |
+| --- | --- |
+| `grok-4.5` | Newest flagship (July 2026) |
+| `grok-4.3` | April 2026 |
+| `grok-4.20-reasoning` / `-non-reasoning` / `-multi-agent` | Fixed-behavior variants (plus `-beta` builds) |
+| `grok-4.1-fast-reasoning` / `-non-reasoning` | Fast tier |
+| `grok-voice-think-fast-1.0` | Realtime voice |
+| `grok-imagine-video-1.5`, `grok-imagine-image` | Video and image generation |
+| `grok-tts`, `grok-stt` | Speech in and out |
+
+## Beyond text
+
+| Surface | Entry point |
+| --- | --- |
+| Video generation | `XaiVideoModel("grok-imagine-video-1.5")` — polls until the clip is ready |
+| Realtime voice | `XaiRealtimeModel("grok-voice-latest")` |

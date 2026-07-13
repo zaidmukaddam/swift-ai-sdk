@@ -1,0 +1,136 @@
+---
+title: Providers
+description: Native packs, compatible factories, the registry, and reasoning translation.
+icon: Cable
+---
+
+Every provider implements one protocol:
+
+```swift
+public protocol LanguageModel: Sendable {
+  var provider: String { get }
+  var modelID: String { get }
+  func stream(_ request: LanguageModelRequest) async throws
+    -> AsyncThrowingStream<StreamPart, Error>
+}
+```
+
+Higher-level functions are built on this spec, so a provider swap never
+touches your feature code.
+
+## Native packs
+
+Each pack speaks its provider's real wire, mirroring the `@ai-sdk/*`
+package family. Where upstream is native, the port is native too; no
+lowest-common-denominator shims.
+
+| Provider | Notes |
+| --- | --- |
+| `OpenAIModel` | Responses API by default, `.chat` for chat completions; reasoning-model rules |
+| `AnthropicModel` | Messages API; thinking, tool use, forced-tool JSON mode |
+| `GoogleModel` | Native Gemini wire; thinking levels and budgets |
+| `GoogleVertexModel` | Express-mode keys or bearer tokens |
+| `AzureOpenAIProvider` | Deployment-based routing |
+| `BedrockModel` | Converse over AWS event stream binary framing; API-key auth |
+| `XaiModel` | Responses API default, typed `SearchParameters`, `.chat` legacy |
+| `GroqModel` | Reasoning deltas, `x_groq` usage envelope, cached tokens |
+| `DeepSeekModel` | `reasoning_content`, cache-hit accounting |
+| `MistralModel`, `PerplexityModel`, `CohereModel` | Native wires, citations as sources |
+| `FoundationModelsModel` | [On-device models](/docs/on-device); no upstream analog |
+
+Keys come from each provider's conventional environment variable
+(`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`, ...) or an explicit
+`apiKey:` argument. `baseURL` includes the version path, matching the AI
+SDK's URL semantics, so gateways and proxies drop in cleanly.
+
+## OpenAI-compatible factories
+
+Providers that upstream serves through `@ai-sdk/openai-compatible` come as
+preconfigured factories with the right URLs and env keys:
+
+```swift
+let together = OpenAICompatibleProvider.togetherAI()("meta-llama/Llama-3.3-70B")
+let local = OpenAICompatibleProvider.ollama()("llama3.3")
+```
+
+Together, Fireworks, Cerebras, OpenRouter, DeepInfra, Baseten, Vercel
+(v0), Gateway, Ollama, LM Studio, and [Sarvam](/docs/providers/sarvam)
+(Indic chat), plus a general initializer for anything else that speaks
+the chat-completions wire. The
+[compatibility page](/docs/providers/compatibility) has every endpoint and
+environment variable.
+
+## The registry and custom providers
+
+`ProviderRegistry` resolves `"provider:model-id"` strings; `customProvider`
+publishes friendly aliases with settings baked in and falls back to a
+wrapped provider for unknown ids:
+
+```swift
+let openai = ProviderRegistry.Provider { OpenAIModel($0) }
+let custom = customProvider(
+  languageModels: [
+    "fast": OpenAIModel("gpt-5.6-luna"),
+    "smart": wrapLanguageModel(model: OpenAIModel("gpt-5.6-sol"), middleware: [.extractReasoning()])
+  ],
+  fallback: openai
+)
+let registry = ProviderRegistry(providers: ["openai": custom])
+let model = try registry.languageModel("openai:fast")
+```
+
+## Live search on xAI
+
+Grok's server-side search is a typed option, not a raw JSON blob:
+
+```swift
+let search = XaiModel.SearchParameters(
+  mode: .auto,
+  returnCitations: true,
+  sources: [.web(), .x(), .news()]
+)
+
+let result = try await generateText(
+  model: XaiModel("grok-4.5"),
+  prompt: "What happened in AI this week?",
+  providerOptions: search.providerOptions
+)
+print(result.sources)   // citations from the search
+```
+
+The full surface: `mode` (`.auto`, `.on`, `.off`), `returnCitations`, a
+`fromDate`/`toDate` window (`YYYY-MM-DD`), `maxSearchResults`, and
+per-source filters —
+`.web(country:excludedWebsites:allowedWebsites:safeSearch:)`,
+`.x(includedHandles:excludedHandles:postFavoriteCount:postViewCount:)`,
+`.news(country:excludedWebsites:safeSearch:)`. It serializes to xAI's
+`search_parameters` body field exactly.
+
+## Sources and citations
+
+Search-backed providers (Perplexity and Cohere citations, OpenAI and
+xAI url annotations) surface as `StreamPart.source` and collect on
+`result.sources`.
+
+## Per-provider pages
+
+Setup, features, and the models each pack special-cases — plus the
+[compatibility matrix](/docs/providers/compatibility) for the
+cross-provider view.
+
+<Cards>
+  <Card title="OpenAI" href="/docs/providers/openai" description="Responses + chat, embeddings, images, speech, realtime." />
+  <Card title="Anthropic" href="/docs/providers/anthropic" description="Adaptive thinking tiers, files and skills, caching." />
+  <Card title="Google" href="/docs/providers/google" description="Gemini, Vertex routing, Gemini Live." />
+  <Card title="Azure OpenAI" href="/docs/providers/azure" description="Deployment-based routing." />
+  <Card title="Amazon Bedrock" href="/docs/providers/bedrock" description="Converse over event streams, API-key auth." />
+  <Card title="xAI" href="/docs/providers/xai" description="Grok, typed live search, video, realtime." />
+  <Card title="Groq" href="/docs/providers/groq" description="Fast open models, reasoning deltas." />
+  <Card title="DeepSeek" href="/docs/providers/deepseek" description="reasoning_content streaming." />
+  <Card title="Mistral" href="/docs/providers/mistral" description="Chat wire plus a binary reasoning knob." />
+  <Card title="Perplexity" href="/docs/providers/perplexity" description="Search-grounded answers with citations." />
+  <Card title="Cohere" href="/docs/providers/cohere" description="Command models, embeddings, reranking." />
+  <Card title="Sarvam" href="/docs/providers/sarvam" description="Indic chat, speech, and transcription." />
+  <Card title="OpenAI-compatible" href="/docs/providers/openai-compatible" description="Together, Fireworks, Ollama, and friends." />
+  <Card title="Media providers" href="/docs/providers/media" description="Image, speech, transcription, and video packs." />
+</Cards>

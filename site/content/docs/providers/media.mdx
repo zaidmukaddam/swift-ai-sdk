@@ -1,0 +1,58 @@
+---
+title: Media providers
+description: The image, speech, transcription, and video packs.
+---
+
+Every pack conforms to the same small protocols (`ImageModel`,
+`SpeechModel`, `TranscriptionModel`, `VideoModel`), so
+[generateImage, generateSpeech, transcribe, and generateVideo](/docs/media)
+work identically across all of them.
+
+## Images
+
+| Pack | Current id (July 2026) | Notes |
+| --- | --- | --- |
+| `OpenAIImageModel` | `gpt-image-2` (also `gpt-image-1.5`, `gpt-image-1-mini`) | Switches to the edits endpoint when you pass source images |
+| `FalImageModel` | `fal-ai/flux/schnell` | Any fal.ai image model id |
+| `LumaImageModel` | `photon-1` (the default) | Polls the generation until it's ready |
+| `ReplicateImageModel` | e.g. `black-forest-labs/flux-schnell` | Replicate-hosted image models |
+
+## Speech
+
+| Pack | Example id | Key from |
+| --- | --- | --- |
+| `OpenAISpeechModel` | `gpt-4o-mini-tts` | `OPENAI_API_KEY` |
+| `ElevenLabsSpeechModel` | `eleven_multilingual_v2` | `ELEVENLABS_API_KEY` |
+| `LMNTSpeechModel` | LMNT voice ids | `LMNT_API_KEY` |
+| `HumeSpeechModel` | No model id — voice only | `HUME_API_KEY` |
+| `DeepgramSpeechModel` | Aura voices | `DEEPGRAM_API_KEY` |
+| `SarvamSpeechModel` | `bulbul:v3` (Indic voices) | `SARVAM_API_KEY` |
+
+Each has its own voice catalog; pass the provider's voice id through
+the `voice:` parameter. Sarvam needs a target language too — see
+[its page](/docs/providers/sarvam).
+
+## Transcription
+
+| Pack | Default id | Style |
+| --- | --- | --- |
+| `OpenAITranscriptionModel` | `whisper-1` | Synchronous multipart upload |
+| `ElevenLabsTranscriptionModel` | `scribe_v1` | Synchronous |
+| `DeepgramTranscriptionModel` | `nova-3` | Synchronous |
+| `AssemblyAITranscriptionModel` | `universal` | Async — submits, polls, fetches |
+| `RevAITranscriptionModel` | `machine` | Async |
+| `GladiaTranscriptionModel` | `default` | Async |
+| `SarvamTranscriptionModel` | `saaras:v3` | Synchronous multipart, Indic |
+
+The defaults are baked into each initializer — `DeepgramTranscriptionModel()`
+already means `nova-3`. The async providers hide the submit/poll/fetch
+dance behind the same single `transcribe` call. Groq-hosted Whisper
+works through `OpenAITranscriptionModel` with Groq's base URL — see
+[the Groq page](/docs/providers/groq#models).
+
+## Video
+
+| Pack | Current id (July 2026) | Notes |
+| --- | --- | --- |
+| `XaiVideoModel` | `grok-imagine-video-1.5` | Polls until the clip renders |
+| `LumaVideoModel` | `ray-2` (the default) | Dream Machine; accepts a start image as the first frame |

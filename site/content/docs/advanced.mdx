@@ -1,0 +1,156 @@
+---
+title: Advanced
+description: Middleware, MCP tools, uploads, telemetry, errors, and retries.
+icon: Settings
+---
+
+## Middleware
+
+`wrapLanguageModel` intercepts requests and stream parts. The built-ins
+cover the common cases:
+
+```swift
+let model = wrapLanguageModel(
+  model: OpenAICompatibleProvider.ollama()("qwen3"),
+  middleware: [
+    .cache(),                          // replay identical requests
+    .extractReasoning(tag: "think"),   // lift <think> spans into reasoning
+    .defaultSettings(temperature: 0.2) // bake in defaults
+  ]
+)
+```
+
+`.simulateStreaming()` turns a non-streaming endpoint into a streaming
+one.
+
+### Caching
+
+`.cache()` keys on the request plus the wrapped model's identity. A hit
+replays the stored stream parts without calling the model; a miss streams
+live, buffers the parts, and stores them once the stream completes. Errors
+are never cached.
+
+```swift
+let store = InMemoryLanguageModelCache()
+let model = wrapLanguageModel(model: OpenAIModel("gpt-5.6-luna"), middleware: [.cache(store: store)])
+```
+
+The default store is in-process. Conform to `LanguageModelCache`
+(`get`/`set` over `[StreamPart]`) to back it with Redis, disk, or anything
+else.
+
+### Custom middleware
+
+A middleware is a value with the hooks you need — `transformRequest` (edit
+the request), `wrapStream` (post-process stream parts), or `wrapCall` (wrap
+the whole call, deciding whether to invoke the model at all — this is what
+`.cache()` uses):
+
+```swift
+let logger = LanguageModelMiddleware(
+  transformRequest: { request in
+    print("sending \(request.messages.count) messages")
+    return request
+  }
+)
+```
+
+Middlewares apply in array order.
+
+## MCP tools
+
+`MCPClient` speaks Streamable HTTP (JSON-RPC over POST, SSE responses,
+session ids) and bridges server tools straight into the loop:
+
+```swift
+let mcp = MCPClient(transport: MCPHTTPTransport(url: serverURL))
+try await mcp.connect()
+
+let result = try await generateText(
+  model: model,
+  prompt: "What is in my calendar today?",
+  tools: try await mcp.tools()
+)
+```
+
+Bridged tools validate arguments against the server's schemas and return
+results into the same loop as local tools.
+
+## File and skill uploads
+
+```swift
+// OpenAI Files API
+let file = try await OpenAIFiles().upload(
+  data: pdf, filename: "report.pdf", purpose: "user_data"
+)
+
+// Anthropic Files API (beta headers handled)
+let upload = try await AnthropicFiles().upload(
+  data: pdf, filename: "report.pdf", mediaType: "application/pdf"
+)
+
+// Anthropic Skills: a SKILL.md folder, zipped into a reusable skill
+let skill = try await AnthropicSkills().upload(
+  files: [SkillFile(path: "brand-guide/SKILL.md", data: skillMD)],
+  displayTitle: "Brand guide"
+)
+```
+
+## Telemetry
+
+`AITelemetry` is a process-wide hook, disabled until you set a
+collector. Conform to `AITelemetryCollector` and forward events into
+OSLog signposts, an OpenTelemetry exporter, or your analytics:
+
+```swift
+struct LogCollector: AITelemetryCollector {
+  func record(_ event: AITelemetryEvent) {
+    logger.info("\(event.name) \(event.phase)", metadata: [
+      "model": "\(event.attributes["ai.model.id"] ?? "")",
+      "duration": "\(event.duration)"
+    ])
+  }
+}
+AITelemetry.collector = LogCollector()
+```
+
+Each call is bracketed by `start` and `end` (or `error`) phases with a
+measured `duration`. Spans cover `ai.generateText`, `ai.streamText`,
+`ai.generateObject`, and the embedding calls, with model, usage, and
+finish-reason attributes.
+
+## Errors
+
+Failures surface as typed `AIError` cases:
+
+```swift
+do {
+  let result = try await generateText(model: model, prompt: prompt)
+} catch let AIError.http(status, body) {
+  // 4xx/5xx with the provider's error body
+} catch AIError.noObjectGenerated {
+  // structured output did not parse or validate
+} catch {
+  // transport errors, cancellation
+}
+```
+
+Other cases include `.decoding`, `.invalidRequest`, and `.unknownTool`.
+Streaming surfaces errors by throwing from the stream you iterate.
+
+## Retries
+
+Every request path retries transient failures with exponential backoff.
+`maxRetries` (default 2) counts retries after the first attempt; set 0 to
+disable:
+
+```swift
+let result = try await generateText(
+  model: model,
+  prompt: prompt,
+  maxRetries: 4
+)
+```
+
+Establishing a stream is retryable; a stream that already delivered parts
+is not, so you never see duplicated tokens.

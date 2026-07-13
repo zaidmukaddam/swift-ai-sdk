@@ -1,0 +1,129 @@
+---
+title: A voice assistant
+description: Live speech both ways, with a client-side tool.
+---
+
+Covers `Examples/22-Realtime.swift`. You end up talking to a model that
+talks back through the speakers and can call your code mid-conversation.
+The full app version lives in `Apps/RealtimeDemo`.
+
+<Steps>
+<Step>
+### Mint a client secret on your server
+
+Realtime connections use short-lived secrets so your API key never
+ships in the app:
+
+```swift title="TokenRoute.swift"
+let model = XaiRealtimeModel("grok-voice-latest")
+let secret = try await model.createClientSecret(options: RealtimeClientSecretOptions(
+  expiresAfterSeconds: 300,
+  sessionConfig: RealtimeSessionConfig(
+    tools: getRealtimeToolDefinitions(tools: [weatherTool])
+  )
+))
+// return {token, url, expiresAt} to the app
+```
+
+`OpenAIRealtimeModel("gpt-realtime")` and
+`GoogleRealtimeModel("gemini-2.5-flash-native-audio-preview-09-2025")`
+mint the same way.
+</Step>
+
+<Step>
+### Create the session
+
+Configure the conversation and handle tool calls in one place:
+
+```swift
+let session = RealtimeSession(
+  model: XaiRealtimeModel("grok-voice-latest"),
+  sessionConfig: RealtimeSessionConfig(
+    instructions: "You are a helpful assistant. Be concise.",
+    voice: "alloy",
+    inputAudioTranscription: .init(),
+    turnDetection: .init(type: .serverVAD)
+  ),
+  onToolCall: { call in
+    call.name == "getWeather" ? .string("sunny, 31 C") : nil
+  }
+)
+
+session.connect(secret: secret)
+```
+
+Returning nil from `onToolCall` defers the answer; submit it later with
+`session.addToolOutput(callID:output:)`.
+</Step>
+
+<Step>
+### Wire the audio
+
+You own capture and playback, which on iOS means AVAudioEngine. Feed the
+mic in as PCM, play the response out:
+
+```swift
+// Speak: 16-bit PCM at the session rate (24 kHz default)
+session.sendAudio(microphoneChunk)
+
+// Listen: decoded audio chunks for your player
+for await chunk in session.audioOutput {
+  player.play(chunk)
+}
+```
+
+When the user interrupts and your player stops, tell the model how much
+was heard so its memory matches reality:
+
+```swift
+session.playbackInterrupted(playedMilliseconds: player.playedMilliseconds)
+```
+</Step>
+
+<Step>
+### Render the conversation
+
+`session.messages` is regular `UIMessage` state: transcripts stream in
+as text parts, your speech shows up transcribed, and tool calls appear
+as tool parts. The same rendering code as a chat screen works here.
+
+Typed input works alongside voice: `session.sendText("Hello!")`.
+</Step>
+</Steps>
+
+## Final code
+
+```swift title="VoiceAssistant.swift"
+import AI
+
+@available(iOS 17.0, macOS 14.0, *)
+@MainActor
+func startVoiceSession(secret: RealtimeClientSecret) -> RealtimeSession {
+  let session = RealtimeSession(
+    model: XaiRealtimeModel("grok-voice-latest"),
+    sessionConfig: RealtimeSessionConfig(
+      instructions: "You are a helpful assistant. Be concise.",
+      inputAudioTranscription: .init(),
+      turnDetection: .init(type: .serverVAD)
+    ),
+    onToolCall: { call in
+      call.name == "getWeather" ? .string("sunny, 31 C") : nil
+    }
+  )
+
+  session.connect(secret: secret)
+  session.sendText("Hello!")
+
+  Task {
+    for await chunk in session.audioOutput {
+      // hand PCM to your AVAudioEngine player
+      _ = chunk
+    }
+  }
+  return session
+}
+```
+
+The `Apps/RealtimeDemo` app adds the AVAudioEngine player and mic
+capture, the settings sheet, and barge-in, in about 200 lines of
+SwiftUI.

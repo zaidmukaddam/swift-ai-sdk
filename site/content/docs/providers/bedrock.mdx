@@ -1,0 +1,40 @@
+---
+title: Amazon Bedrock
+description: The Converse API over AWS event-stream framing, with API-key auth.
+---
+
+```swift
+let model = BedrockModel(
+  "anthropic.claude-sonnet-4-5-20250929-v1:0",
+  region: "us-east-1"
+)
+```
+
+Key from `AWS_BEARER_TOKEN_BEDROCK` — Bedrock's API-key auth, no SigV4
+signing or credential chain needed. The base URL derives from the
+region (`https://bedrock-runtime.{region}.amazonaws.com`) unless you
+pass one.
+
+## Features
+
+- Tools, structured output, and vision over the Converse API.
+- Responses stream in AWS's binary event-stream framing; the library
+  decodes it natively.
+- `usage.cachedInputTokens` is populated where the model reports cache
+  reads.
+
+## Models
+
+The `reasoning` parameter translates by model-id family:
+
+| Family | Translation |
+| --- | --- |
+| `anthropic.*` | Claude thinking config — the same adaptive/budget tiers as the [Anthropic pack](/docs/providers/anthropic) |
+| `openai.*` | `reasoning_effort` |
+| everything else | Generic `reasoningConfig.maxReasoningEffort` (`xhigh` becomes `max`) |
+
+Model ids are Bedrock's prefixed forms, e.g.
+`anthropic.claude-sonnet-4-5-20250929-v1:0` or an inference profile like
+`us.anthropic.claude-sonnet-4-5-20250929-v1:0`. Amazon's own Nova line
+(as of July 2026): `nova-2-lite` (December 2025), plus `nova-pro`,
+`nova-lite`, and `nova-micro`.

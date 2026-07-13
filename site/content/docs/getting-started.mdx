@@ -1,0 +1,94 @@
+---
+title: Getting started
+description: Add the package and stream a first response.
+icon: Rocket
+---
+
+## Add the package
+
+In Xcode: File, Add Package Dependencies, paste the repository URL. Or in
+`Package.swift`:
+
+```swift title="Package.swift"
+dependencies: [
+  .package(url: "https://github.com/zaidmukaddam/swift-ai-sdk", branch: "main")
+],
+targets: [
+  .target(name: "MyApp", dependencies: [.product(name: "AI", package: "swift-ai-sdk")])
+]
+```
+
+Works on iOS 16, macOS 13, tvOS 16, watchOS 9, and visionOS 1. The chat
+session objects want iOS 17 or macOS 14.
+
+## No API key? Start free
+
+Two ways to get a first response without signing up for anything.
+
+If you have [Ollama](https://ollama.com) on your Mac:
+
+```swift title="FirstStream.swift"
+import AI
+
+let model = OpenAICompatibleProvider.ollama()("granite4.1:3b")
+
+let result = streamText(
+  model: model,
+  prompt: "Say hello in three languages."
+)
+for try await token in result.textStream {
+  print(token, terminator: "")
+}
+```
+
+Or skip the network entirely on devices with Apple Intelligence:
+
+```swift
+let result = try await generateText(
+  model: FoundationModelsModel(),
+  prompt: "One-line haiku about rain."
+)
+```
+
+## Or bring a key
+
+Every provider reads its key from the environment, or takes it directly:
+
+```swift
+let claude = AnthropicModel("claude-fable-5")           // ANTHROPIC_API_KEY
+let gpt = OpenAIModel("gpt-5.6-terra")                  // OPENAI_API_KEY
+let gemini = GoogleModel("gemini-3.5-flash")            // GOOGLE_GENERATIVE_AI_API_KEY
+let grok = XaiModel("grok-4.5", apiKey: myKey)          // or pass it in
+```
+
+Changing providers is a one-line change. Everything downstream stays put.
+
+## Give it a tool
+
+Hand the model a function and it figures out when to call it. The loop
+runs the call, feeds the result back, and returns the final answer:
+
+```swift
+let getTime = Tool(
+  name: "current_time",
+  description: "Returns the current time in a timezone.",
+  parameters: ["type": "object",
+               "properties": ["tz": ["type": "string"]],
+               "required": ["tz"]]
+) { args in
+  .string(Date().formatted())
+}
+
+let result = try await generateText(
+  model: model,
+  prompt: "What time is it in Kolkata?",
+  tools: [getTime]
+)
+print(result.text)          // used the tool, then answered
+```
+
+## Where next
+
+The [guides](/docs/guides) build real things step by step: a chat screen,
+an agent with tools, a voice assistant. Or go straight to
+[generating text](/docs/generating-text) for the full API.

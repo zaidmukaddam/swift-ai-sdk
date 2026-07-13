@@ -1,0 +1,41 @@
+---
+title: Cohere
+description: Command models, embeddings, and the reranker.
+---
+
+```swift
+let model = CohereModel("command-a")
+```
+
+Key from `COHERE_API_KEY`; base URL `https://api.cohere.com/v2`.
+
+## Features
+
+- Tools, structured output, and vision on the native v2 chat wire.
+- Citations surface as `StreamPart.source`.
+- No reasoning knob — the `reasoning` parameter is ignored.
+
+## Embeddings and reranking
+
+```swift
+let embeddings = try await embedMany(
+  model: CohereEmbeddingModel("embed-v4.0"),
+  values: documents
+)
+
+let ranked = try await rerank(
+  model: CohereRerankingModel("rerank-v4-fast"),
+  query: "How do I cancel my subscription?",
+  documents: documents,
+  topN: 3
+)
+ranked.rankedDocuments.first?.document       // best match
+ranked.rankedDocuments.first?.relevanceScore
+```
+
+## Models
+
+As of July 2026: `command-a` (also served date-stamped as
+`command-a-03-2025`) for chat, `embed-v4.0` for embeddings, and
+`rerank-v4-pro` / `rerank-v4-fast` (December 2025) or the older
+`rerank-v3.5` for the reranker.

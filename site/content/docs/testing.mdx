@@ -1,0 +1,108 @@
+---
+title: Testing
+description: "The AITesting kit: mock models, scripted loops, stream simulators."
+icon: FlaskConical
+---
+
+The `AITesting` library is the `ai/test` analog: deterministic doubles
+for your test targets, no network, no keys. Add the product next to `AI`:
+
+```swift title="Package.swift"
+.testTarget(
+  name: "MyAppTests",
+  dependencies: [
+    .product(name: "AI", package: "swift-ai-sdk"),
+    .product(name: "AITesting", package: "swift-ai-sdk")
+  ]
+)
+```
+
+## MockLanguageModel
+
+The one-liner covers most tests:
+
+```swift
+import AITesting
+
+func testGreeting() async throws {
+  let model = MockLanguageModel(text: "Hello, world!")
+  let result = try await generateText(model: model, prompt: "Hi")
+  XCTAssertEqual(result.text, "Hello, world!")
+}
+```
+
+Every request is recorded, so you can assert on exactly what your code
+sent:
+
+```swift
+XCTAssertEqual(model.requests.count, 1)
+XCTAssertEqual(model.requests[0].messages.last?.text, "Hi")
+XCTAssertEqual(model.requests[0].reasoning, .medium)
+```
+
+## Scripting multi-step loops
+
+`responses:` provides one part-array per model round-trip; calls past the
+end replay the last script. That is enough to test a full tool loop:
+
+```swift
+let model = MockLanguageModel(responses: [
+  [
+    .toolCall(ToolCall(id: "c1", name: "search", arguments: ["q": "swift"])),
+    .finish(reason: .toolCalls, usage: .init())
+  ],
+  [
+    .textDelta("Found it."),
+    .finish(reason: .stop, usage: .init())
+  ]
+])
+
+let result = try await generateText(model: model, prompt: "go", tools: [searchTool])
+XCTAssertEqual(result.stepCount, 2)
+XCTAssertEqual(result.text, "Found it.")
+```
+
+For full control, compute parts from the request and call number:
+
+```swift
+let model = MockLanguageModel { request, callIndex in
+  [.textDelta("call #\(callIndex)"), .finish(reason: .stop, usage: .init())]
+}
+```
+
+Pass `chunkDelay:` to pace parts like a live stream.
+
+## MockEmbeddingModel
+
+```swift
+let model = MockEmbeddingModel(vectors: [[1, 0], [0, 1]])
+let result = try await embedMany(model: model, values: ["a", "b", "c"])
+// vectors cycle; model.batches records every input batch
+```
+
+## Stream and value helpers
+
+```swift
+// Any chunk array as a paced AsyncThrowingStream: test UI pipelines
+// without a model at all.
+let chunks = simulateReadableStream(
+  chunks: uiMessageChunks,
+  initialDelay: .milliseconds(100),
+  chunkDelay: .milliseconds(10)
+)
+
+// Deterministic id generators: hands out values in order, sticks at the last.
+let nextID = mockValues("id-1", "id-2", "id-3")
+```
+
+## Testing chat UIs
+
+Sessions take transports, and an `Agent` over a mock model is a
+transport, so a full `ChatSession` test needs no HTTP:
+
+```swift
+let agent = Agent(model: MockLanguageModel(text: "Hi there!"))
+let chat = ChatSession(transport: agent)
+chat.send("Hello")
+// await chat.status == .ready, then assert on chat.messages
+```

@@ -1,0 +1,143 @@
+---
+title: Human-in-the-loop approvals
+description: Dangerous tools pause until the user says yes.
+---
+
+Covers `Examples/16-ToolApprovals.swift`. You end up with a delete tool
+that never runs without a confirmation, in both plain calls and chat UIs.
+
+<Steps>
+<Step>
+### Mark the tool
+
+`needsApproval: true` pauses the loop before every call. For
+argument-dependent decisions, pass a closure instead.
+
+```swift
+let deleteFile = Tool(
+  name: "deleteFile",
+  description: "Removes a file from disk",
+  parameters: ["type": "object",
+               "properties": ["path": ["type": "string"]],
+               "required": ["path"]],
+  needsApproval: true
+) { args in
+  .string("deleted \(args["path"]?.stringValue ?? "?")")
+}
+```
+</Step>
+
+<Step>
+### Catch the pause
+
+The loop stops with an approval request instead of executing. Nothing
+was deleted yet:
+
+```swift
+let result = try await generateText(
+  model: AnthropicModel("claude-sonnet-5"),
+  prompt: "Clean up /tmp/scratch.txt",
+  tools: [deleteFile]
+)
+
+for request in result.steps.last?.approvalRequests ?? [] {
+  print("wants to run \(request.call.name) with \(request.call.arguments)")
+}
+```
+</Step>
+
+<Step>
+### Resume with the decision
+
+Append the user's answer to the history and call again. Approved calls
+execute; denied ones surface to the model as denials:
+
+```swift
+var messages = result.messages
+messages.append(Message(role: .tool, content: [
+  .toolApprovalResponse(ToolApprovalResponse(
+    approvalID: request.approvalID,
+    toolCallID: request.call.id,
+    approved: true
+  ))
+]))
+
+let resumed = try await generateText(
+  model: AnthropicModel("claude-sonnet-5"),
+  messages: messages,
+  tools: [deleteFile]
+)
+print(resumed.text)
+```
+</Step>
+
+<Step>
+### In a chat UI it's one call
+
+`ChatSession` surfaces the pause as a tool part in `approvalRequested`
+state. Show your confirmation UI, then answer:
+
+```swift
+for part in chat.messages.last?.parts ?? [] {
+  guard case .tool(let tool) = part,
+        tool.state == .approvalRequested,
+        let approval = tool.approval else { continue }
+  chat.addToolApprovalResponse(approvalID: approval.id, approved: true)
+}
+```
+</Step>
+</Steps>
+
+## Final code
+
+```swift title="ApprovedDelete.swift"
+import AI
+
+let deleteFile = Tool(
+  name: "deleteFile",
+  description: "Removes a file from disk",
+  parameters: ["type": "object",
+               "properties": ["path": ["type": "string"]],
+               "required": ["path"]],
+  needsApproval: true
+) { args in
+  .string("deleted \(args["path"]?.stringValue ?? "?")")
+}
+
+func cleanUp() async throws {
+  let model = AnthropicModel("claude-sonnet-5")
+
+  let result = try await generateText(
+    model: model,
+    prompt: "Clean up /tmp/scratch.txt",
+    tools: [deleteFile]
+  )
+
+  for request in result.steps.last?.approvalRequests ?? [] {
+    let userSaidYes = await confirmWithUser(request.call)
+
+    var messages = result.messages
+    messages.append(Message(role: .tool, content: [
+      .toolApprovalResponse(ToolApprovalResponse(
+        approvalID: request.approvalID,
+        toolCallID: request.call.id,
+        approved: userSaidYes
+      ))
+    ]))
+
+    let resumed = try await generateText(
+      model: model,
+      messages: messages,
+      tools: [deleteFile]
+    )
+    print(resumed.text)
+  }
+}
+```
+
+Client-side tools work the same way with one difference: there's no
+executor at all, so the app supplies the result instead of a yes or no:
+
+```swift
+chat.addToolResult(toolCallID: tool.toolCallID, result: ["photoID": "IMG_0042"])
+```

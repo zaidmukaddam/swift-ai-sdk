@@ -1,0 +1,134 @@
+---
+title: Structured output
+description: Get typed Codable values back instead of parsing prose.
+icon: Braces
+---
+
+Asking a model for JSON and hoping is not a strategy. `generateObject`
+constrains the output to a schema and decodes it into your `Codable`
+type; if the model produces something else, you get a thrown error
+instead of a corrupt view.
+
+```swift
+struct Recipe: Codable {
+  var name: String
+  var ingredients: [String]
+  var steps: [String]
+}
+
+let recipeSchema: JSONValue = [
+  "type": "object",
+  "properties": [
+    "name": ["type": "string"],
+    "ingredients": ["type": "array", "items": ["type": "string"]],
+    "steps": ["type": "array", "items": ["type": "string"]]
+  ],
+  "required": ["name", "ingredients", "steps"]
+]
+
+let result = try await generateObject(
+  model: OpenAIModel("gpt-5.6-sol"),
+  of: Recipe.self,
+  schema: recipeSchema,
+  prompt: "A simple lasagna recipe."
+)
+print(result.object.name)
+```
+
+Each provider uses its best native mechanism: JSON schema mode on OpenAI,
+constrained decoding on Gemini and on-device models, a forced tool call
+on Anthropic. Same call site everywhere.
+
+## The Schema DSL
+
+Writing raw JSON Schema gets old fast. The `Schema` combinators build it
+for you and validate the model's output at runtime before decoding:
+
+```swift
+let recipeSchema = Schema.object([
+  "name": .string(description: "Recipe name"),
+  "steps": .array(of: .string(), minItems: 1),
+  "servings": .integer(minimum: 1).optional()
+])
+
+let result = try await generateObject(
+  model: model,
+  of: Recipe.self,
+  schema: recipeSchema,
+  prompt: "A simple dal recipe."
+)
+```
+
+Enums, unions, and nesting compose the way you'd hope:
+
+```swift
+let event = Schema.object([
+  "kind": .enum(["meeting", "reminder"]),
+  "when": .string(format: "date-time"),
+  "attendees": .array(of: .object([
+    "name": .string(),
+    "id": .anyOf([.integer(), .string()])
+  ])).optional()
+])
+```
+
+The same schemas plug into `Tool(parameters:)`, where arguments get
+validated before your closure runs.
+
+## Streaming partials
+
+`streamObject` repairs partial JSON as it arrives, so a form can fill
+itself in while the model writes:
+
+```swift
+let result = streamObject(
+  model: model,
+  schema: recipeSchema,
+  prompt: "A simple lasagna recipe."
+)
+
+var latest: JSONValue = .null
+for try await partial in result.partialObjectStream {
+  latest = partial
+  render(partial)          // grows field by field
+}
+let recipe = try latest.decode(Recipe.self)   // the last snapshot is complete
+```
+
+### Element streaming
+
+For array-shaped schemas, `elementStream()` yields each completed element
+exactly once, in order — a list view can append rows instead of
+re-rendering snapshots:
+
+```swift
+let result = streamObject(model: model, schema: heroListSchema, prompt: "3 heroes")
+
+for try await hero in result.elementStream() {
+  rows.append(hero)        // fires as each array element completes
+}
+```
+
+An element counts as complete once the model has moved on to the next
+one (or the stream ends). It's derived from `partialObjectStream`, so
+consume one or the other, not both; non-array schemas produce an empty
+stream.
+
+## Enums and free-form JSON
+
+Two smaller strategies for smaller jobs:
+
+```swift
+// Pick one of a fixed set. Great for classification.
+let sentiment = try await generateEnum(
+  model: model,
+  cases: ["positive", "neutral", "negative"],
+  prompt: "Classify: this library is delightful."
+)
+
+// Any valid JSON, no schema.
+let palette = try await generateJSON(
+  model: model,
+  prompt: "A color palette as JSON."
+)
+```

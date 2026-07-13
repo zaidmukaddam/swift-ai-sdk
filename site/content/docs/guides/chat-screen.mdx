@@ -1,0 +1,175 @@
+---
+title: A chat screen
+description: ChatSession plus SwiftUI, against your route or fully local.
+---
+
+Covers `Examples/09-ChatSession.swift` and `19-SessionHooks.swift`. You
+end up with a streaming chat view that works against a web chat route or
+an in-process model.
+
+<Steps>
+<Step>
+### Have a chat route (or skip this step)
+
+The URL you'll point the app at is an AI SDK chat route: a POST endpoint
+on your server that takes `{messages}` and streams UI message chunks
+back. If your web app already uses `useChat`, you have one — reuse it
+as-is. If not, this is the entire route (Next.js shown; any framework
+the AI SDK supports works):
+
+```ts title="app/api/chat/route.ts"
+import {
+  streamText, UIMessage, convertToModelMessages,
+  createUIMessageStreamResponse, toUIMessageStream,
+} from 'ai';
+
+export async function POST(req: Request) {
+  const { messages }: { messages: UIMessage[] } = await req.json();
+
+  const result = streamText({
+    model: 'anthropic/claude-sonnet-5',
+    messages: await convertToModelMessages(messages),
+  });
+
+  return createUIMessageStreamResponse({
+    stream: toUIMessageStream({ stream: result.stream }),
+  });
+}
+```
+
+Deploy it anywhere; its URL is what you pass below. Prefer serving from
+Swift? The [streaming protocol page](/docs/streaming-protocol) builds
+the same route with this library's server helpers. No server at all?
+Skip ahead — the local transport needs none.
+</Step>
+
+<Step>
+### Create the session
+
+`ChatSession` is `@Observable`; keep it in `@State`. Point the transport
+at that route:
+
+```swift
+@State private var chat = ChatSession(transport: HTTPChatTransport(
+  api: URL(string: "https://your-app.vercel.app/api/chat")!,   // the route from step 1
+  headers: ["Authorization": "Bearer token"],
+  body: ["sessionId": "abc123"]     // extra fields, merged into every request
+))
+```
+
+No server? Use a local transport and skip the network:
+
+```swift
+@State private var chat = ChatSession(transport: LocalChatTransport(
+  model: AnthropicModel("claude-sonnet-5"),
+  system: "You are a helpful assistant."
+))
+```
+</Step>
+
+<Step>
+### Render the messages
+
+A message is typed parts, not just a string. Text is the common case:
+
+```swift
+ScrollView {
+  ForEach(chat.messages) { message in
+    ForEach(Array(message.parts.enumerated()), id: \.offset) { _, part in
+      if case .text(let text) = part {
+        Text(text.text)
+          .frame(maxWidth: .infinity,
+                 alignment: message.role == .user ? .trailing : .leading)
+      }
+    }
+  }
+}
+```
+
+Parts update token by token as the stream arrives; SwiftUI re-renders on
+its own.
+</Step>
+
+<Step>
+### Send, and show status
+
+```swift
+TextField("Message", text: $input)
+  .onSubmit {
+    chat.send(input)
+    input = ""
+  }
+
+if chat.status == .streaming { ProgressView() }
+```
+
+`chat.stop()` cancels mid-stream, `chat.regenerate()` redoes the last
+answer, and `chat.resumeStream()` picks up a response that kept going
+while the app was backgrounded.
+</Step>
+</Steps>
+
+## Final code
+
+```swift title="ChatView.swift"
+import AI
+import SwiftUI
+
+struct ChatView: View {
+  @State private var chat = ChatSession(transport: HTTPChatTransport(
+    api: URL(string: "https://your-app.vercel.app/api/chat")!
+  ))
+  @State private var input = ""
+
+  var body: some View {
+    VStack {
+      ScrollView {
+        ForEach(chat.messages) { message in
+          ForEach(Array(message.parts.enumerated()), id: \.offset) { _, part in
+            if case .text(let text) = part {
+              Text(text.text)
+                .padding(10)
+                .frame(maxWidth: .infinity,
+                       alignment: message.role == .user ? .trailing : .leading)
+            }
+          }
+        }
+      }
+      HStack {
+        TextField("Message", text: $input)
+          .onSubmit(send)
+        Button("Send", action: send)
+          .disabled(chat.status == .streaming)
+      }
+      .padding()
+    }
+  }
+
+  private func send() {
+    chat.send(input)
+    input = ""
+  }
+}
+```
+
+## The two smaller sessions
+
+Single-turn completion and streamed objects follow the same pattern:
+
+```swift title="SessionHooks.swift"
+// Completion: one prompt, streamed text state.
+@State var completion = CompletionSession(
+  transport: HTTPCompletionTransport(api: URL(string: "https://your-app.com/api/completion")!)
+)
+completion.complete("Write a tagline for a coffee shop")
+// completion.completion grows as tokens arrive; completion.isLoading drives spinners
+
+// Objects: streamed structured output with partial-JSON repair.
+@State var session = ObjectSession(
+  model: OpenAIModel("gpt-5.6-sol"),
+  schema: Schema.object(["title": .string(), "body": .string()])
+)
+session.submit("A notification about a delayed flight")
+// session.object is the partial JSON while streaming; then:
+let note = session.decoded(Notification.self)
+```

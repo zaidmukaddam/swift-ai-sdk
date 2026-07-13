@@ -1,0 +1,42 @@
+---
+title: Azure OpenAI
+description: Deployment-based routing over the OpenAI wire.
+---
+
+```swift
+let azure = AzureOpenAIProvider(
+  resourceName: "my-resource",   // or AZURE_RESOURCE_NAME
+  apiVersion: "v1"
+)
+let model = azure("my-gpt5-deployment")
+```
+
+Key from `AZURE_API_KEY` (sent as the `api-key` header). The deployment
+name doubles as the `model` body field, exactly like the AI SDK.
+
+## Features
+
+Everything the OpenAI chat wire supports — tools, structured output,
+vision, reasoning models, cached-token usage — routed at your Azure
+resource.
+
+- `apiVersion:` sets the `api-version` query parameter (default `"v1"`).
+- `useDeploymentBasedUrls: true` switches to the legacy
+  `/deployments/{deployment}` path shape for older resources.
+- `baseURL:` overrides the host entirely for gateways in front of Azure.
+
+## Models
+
+Azure model ids are your deployment names — deploy any current OpenAI
+model (the `gpt-5.6` family, `gpt-5.5`, `gpt-image-2`, embeddings) in
+the Azure portal and address it by whatever you named the deployment.
+The [OpenAI page](/docs/providers/openai) has the current lineup.
+
+## Embeddings
+
+The provider vends embedding deployments the same way:
+
+```swift
+let embeddings = azure.textEmbeddingModel("my-embedding-deployment")
+let result = try await embed(model: embeddings, value: "hello")
+```

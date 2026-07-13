@@ -1,0 +1,124 @@
+---
+title: Compatibility
+description: Every provider, what it supports, and the models the library special-cases.
+icon: Table
+---
+
+One table to answer "can I do X on Y", from what each pack actually
+implements.
+
+## Language models
+
+| Provider | Tools | Structured output | Reasoning | Vision | Sources | Cached tokens |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: |
+| OpenAI (Responses) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| OpenAI (chat) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Azure OpenAI | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Anthropic | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| Google / Vertex | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| Bedrock | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| xAI | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Groq | ✓* | ✓* | ✓ | ✓* | — | ✓ |
+| DeepSeek | ✓* | ✓* | ✓ | ✓* | — | ✓ |
+| Mistral | ✓* | ✓* | ✓ | ✓* | — | — |
+| Perplexity | — | ✓* | — | ✓* | ✓ | — |
+| Cohere | ✓ | ✓ | — | ✓ | ✓ | — |
+| Foundation Models | ✓ | ✓ | — | — | — | — |
+| OpenAI-compatible | ✓* | ✓* | ✓* | ✓* | — | — |
+
+\* Rides the shared chat-completions wire; whether a given model honors
+it is up to the model. Perplexity has no tool calling upstream, so the
+library doesn't pretend otherwise.
+
+**Column notes.** *Structured output* uses each provider's best native
+mechanism: JSON schema mode on the OpenAI wire, constrained decoding on
+Gemini, a forced tool call on Anthropic, guided generation on-device.
+*Sources* means citations surface as `StreamPart.source` (OpenAI url
+annotations, xAI live search, Perplexity and Cohere citations).
+*Cached tokens* means `usage.cachedInputTokens` is populated on
+prompt-cache hits.
+
+## Models the library special-cases
+
+Model ids are free strings — anything the provider serves works. These
+are the ids the library treats specially, straight from the source:
+
+### OpenAI
+
+- The reasoning ruleset applies to `o1*`, `o3*`, `o4-mini*`, and `gpt-5*`
+  except `gpt-5-chat*`.
+- `gpt-5.1` through `gpt-5.6` accept `temperature`/`topP` again when
+  reasoning effort is `none`; other reasoning models drop them.
+
+### Anthropic
+
+| Models | Output ceiling | Reasoning translation |
+| --- | --- | --- |
+| Sonnet 5, Fable 5, Opus 4.7 / 4.8 | 128k | Adaptive thinking, effort up to `xhigh` |
+| Sonnet 4.6, Opus 4.6 | 128k | Adaptive thinking (`xhigh` coerces to `max`) |
+| Sonnet 4.5, Opus 4.5, Haiku 4.5, Sonnet 4.x | 64k | `budget_tokens` from the ceiling |
+| Opus 4.1, Opus 4.x | 32k | `budget_tokens` from the ceiling |
+| Anything else | 4,096 | `budget_tokens`, conservative ceiling |
+
+The same table drives Bedrock's `anthropic.*` model ids.
+
+### Google
+
+- `gemini-3*` takes `thinkingLevel` — except `gemini-3-pro-image`, which
+  stays on budgets.
+- Budget models cap at 32,768 thinking tokens for 2.5 Pro and
+  `gemini-3-pro-image`, 24,576 for everything else.
+
+### xAI
+
+- `grok-4.20` date-stamped `-reasoning` / `-non-reasoning` variants have
+  their behavior baked in, so the `reasoning` parameter is not sent.
+
+### Mistral
+
+- `reasoning` maps to `reasoning_effort` only on `mistral-small-latest`,
+  `mistral-small-2603`, `mistral-medium-3`, and `mistral-medium-3.5`.
+
+### Bedrock
+
+Three families by model-id prefix: `anthropic.*` gets Claude thinking
+config, `openai.*` gets `reasoning_effort`, and everything else gets the
+generic `reasoningConfig` (where `xhigh` becomes `max`).
+
+## Beyond text
+
+| Capability | Providers |
+| --- | --- |
+| Embeddings | OpenAI, Azure OpenAI, Cohere, any OpenAI-compatible endpoint |
+| Reranking | Cohere |
+| Image generation | OpenAI (`gpt-image-1`, edits included), fal, Luma, Replicate |
+| Speech | OpenAI, ElevenLabs, LMNT, Hume, Deepgram, Sarvam |
+| Transcription | OpenAI, ElevenLabs, Deepgram, AssemblyAI, Rev.ai, Gladia, Sarvam |
+| Video | xAI, Luma |
+| Realtime voice | OpenAI, xAI, Google (Gemini Live) |
+
+The async transcription providers (AssemblyAI, Rev.ai, Gladia) submit,
+poll, and fetch internally — one call either way.
+
+## OpenAI-compatible factories
+
+Preconfigured endpoints with the AI SDK's exact base URLs and
+environment variables:
+
+| Factory | Endpoint | Key from |
+| --- | --- | --- |
+| `.togetherAI()` | `api.together.xyz/v1` | `TOGETHER_API_KEY` |
+| `.fireworks()` | `api.fireworks.ai/inference/v1` | `FIREWORKS_API_KEY` |
+| `.cerebras()` | `api.cerebras.ai/v1` | `CEREBRAS_API_KEY` |
+| `.openRouter()` | `openrouter.ai/api/v1` | `OPENROUTER_API_KEY` |
+| `.deepInfra()` | `api.deepinfra.com/v1/openai` | `DEEPINFRA_API_KEY` |
+| `.baseten()` | `inference.baseten.co/v1` | `BASETEN_API_KEY` |
+| `.vercel()` | `api.v0.dev/v1` | `VERCEL_API_KEY` |
+| `.gateway()` | `ai-gateway.vercel.sh/v1` | `AI_GATEWAY_API_KEY` |
+| `.ollama()` | `localhost:11434/v1` | no key |
+| `.lmStudio()` | `localhost:1234/v1` | no key |
+| `.sarvam()` | `api.sarvam.ai/v1` | `SARVAM_API_KEY` |
+
+Plus the general initializer for any other chat-completions endpoint.
+Hugging Face and Replicate aren't included — neither fits the
+chat-completions wire.

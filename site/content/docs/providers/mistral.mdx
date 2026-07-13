@@ -1,0 +1,37 @@
+---
+title: Mistral
+description: Mistral and Magistral models on the chat-completions wire.
+---
+
+```swift
+let model = MistralModel("mistral-medium-3.5")
+```
+
+Key from `MISTRAL_API_KEY`; base URL `https://api.mistral.ai/v1`.
+
+## Features
+
+- Rides the shared chat-completions wire: tools, structured output, and
+  vision are encoded for any model that honors them.
+
+## Models
+
+The `reasoning` parameter maps to `reasoning_effort` only on the models
+that accept it — `mistral-small-latest`, `mistral-small-2603`,
+`mistral-medium-3`, and `mistral-medium-3.5`. The knob is binary
+upstream: `.none` sends `none`, every other level sends `high`. Other
+model ids ignore the parameter rather than erroring.
+
+### Current lineup
+
+As of July 2026, newest first:
+
+| Model | Notes |
+| --- | --- |
+| `mistral-medium-3.5` | Newest (April 2026), reasoning knob |
+| `mistral-large-3` | December 2025 flagship |
+| `devstral-2`, `devstral-small-2` | Code models |
+| `ministral-14b`, `ministral-8b`, `ministral-3b` | Edge tier |
+| `magistral-medium`, `magistral-small` | Reasoning line |
+| `pixtral-large`, `pixtral-12b` | Vision |
+| `codestral`, `codestral-embed`, `mistral-embed` | Code and embeddings |

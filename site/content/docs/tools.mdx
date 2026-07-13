@@ -1,0 +1,136 @@
+---
+title: Tools
+description: Typed tools, execution context, approvals, and client-side calls.
+icon: Wrench
+---
+
+A tool is anything conforming to `AIToolProtocol`: a name, a description,
+JSON Schema parameters, and an async `execute`. The closure-based `Tool`
+covers most cases.
+
+```swift
+let search = Tool(
+  name: "search",
+  description: "Search the product catalog.",
+  parameters: Schema.object(["query": .string()])
+) { arguments in
+  let query = arguments["query"]?.stringValue ?? ""
+  return try await catalog.search(query)
+}
+```
+
+## Typed arguments
+
+`Tool.typed` decodes arguments into a `Decodable` before your code runs:
+
+```swift
+struct SearchArgs: Decodable { let query: String }
+
+let search = Tool.typed(
+  name: "search",
+  description: "Search the product catalog.",
+  parameters: Schema.object(["query": .string()])
+) { (args: SearchArgs) in
+  try await catalog.search(args.query)
+}
+```
+
+## Execution context
+
+Tools can see which call they are servicing, the step messages, and
+per-request context that should never ride in the prompt. This is the AI
+SDK's tool execution options plus `toolsContext`:
+
+```swift
+let orders = Tool(
+  name: "list_orders",
+  description: "List recent orders for the signed-in user.",
+  parameters: Schema.object([:])
+) { _, options in
+  let userID = options.context?["userID"]?.stringValue ?? "anonymous"
+  return try await store.orders(for: userID)
+}
+
+let result = try await generateText(
+  model: model,
+  prompt: "What did I order recently?",
+  tools: [orders],
+  toolsContext: ["list_orders": ["userID": .string("user-7")]]
+)
+```
+
+`options.toolCallID` and `options.messages` are there too.
+
+## Human-in-the-loop approvals
+
+A tool can require user approval before it runs. The loop pauses with a
+`toolApprovalRequest`, your app answers, and execution resumes on the next
+turn; denials surface to the model as denied results.
+
+```swift
+let delete = Tool(
+  name: "delete_file",
+  description: "Delete a file.",
+  parameters: Schema.object(["path": .string()]),
+  needsApproval: true
+) { arguments in
+  try await files.delete(arguments["path"]?.stringValue ?? "")
+}
+```
+
+Approval can also depend on the arguments: pass
+`needsApproval: { arguments in ... }`. In chat UIs, respond with
+`ChatSession.addToolApprovalResponse(approvalID:approved:)`.
+
+## Client-side tools
+
+A tool without an executor ends the turn with the call unexecuted. The
+model asked; your app answers, whenever it's ready:
+
+```swift
+let pickPhoto = Tool(
+  name: "pick_photo",
+  description: "Ask the user to pick a photo.",
+  parameters: Schema.object([:])
+)
+
+// later, in the chat UI:
+chat.addToolResult(toolCallID: tool.toolCallID, result: ["photoID": "IMG_0042"])
+```
+
+## Provider-executed tools
+
+Some providers run their own server-side tools — live web and X search,
+code execution, file search, computer use — and stream the calls and
+results back in the same turn. Each provider exposes typed builders under
+`<Model>.Tools`; drop them in `tools:` next to your own:
+
+```swift
+let result = try await generateText(
+  model: XaiModel("grok-4.5"),
+  prompt: "What shipped in AI this week?",
+  tools: [
+    XaiModel.Tools.webSearch(allowedDomains: ["arxiv.org"]),
+    XaiModel.Tools.xSearch(allowedXHandles: ["xai"]),
+  ]
+)
+```
+
+These carry no executor: the provider runs them, so the loop never asks
+your app to and the turn doesn't pause. The calls and results arrive as
+`.toolCall` / `.toolResult` parts with `toolCall.providerExecuted == true`
+(web citations also surface as `.source`), and each provider ignores
+builders that belong to another — so mixing them is safe. Each provider
+page lists its catalog: [xAI](/docs/providers/xai),
+[OpenAI](/docs/providers/openai), [Google](/docs/providers/google),
+[Anthropic](/docs/providers/anthropic).
+
+For a server-side tool without a typed builder yet, construct one directly
+with `ProviderDefinedTool(provider:id:name:args:)` — `args` is the native
+tool entry the provider expects.
+
+## Validation
+
+When `parameters` is built from the `Schema` DSL, arguments are validated
+before execution and malformed calls become error results for the model to
+correct, instead of crashing your tool.

@@ -1,0 +1,131 @@
+---
+title: Reasoning
+description: One portable parameter for thinking across every provider.
+icon: Brain
+---
+
+Many models support an internal thinking phase before answering. The
+`reasoning` parameter controls it across providers with a single setting,
+on both `generateText` and `streamText`:
+
+```swift
+let result = try await generateText(
+  model: AnthropicModel("claude-sonnet-5"),
+  prompt: "How many people will live in the world in 2040?",
+  reasoning: .medium
+)
+print(result.reasoningText)   // the thinking
+print(result.text)            // the answer
+```
+
+Values: `.none`, `.minimal`, `.low`, `.medium`, `.high`, `.xhigh`, and
+`.providerDefault` (the default, as if the parameter was omitted).
+
+## Streaming reasoning
+
+Thinking arrives as its own deltas on the full stream:
+
+```swift
+let result = streamText(model: model, prompt: prompt, reasoning: .high)
+
+for try await part in result.fullStream {
+  switch part {
+  case .reasoningDelta(let thought): renderThinking(thought)
+  case .textDelta(let text): renderAnswer(text)
+  default: break
+  }
+}
+```
+
+## How each provider translates it
+
+Effort enums where they exist, token budgets where they do not:
+
+| Provider | Wire translation |
+| --- | --- |
+| OpenAI (Responses) | `reasoning.effort`, plus an automatic detailed summary |
+| OpenAI (chat) | `reasoning_effort`, passed verbatim |
+| Anthropic | Adaptive thinking with an effort level on current models; a `budget_tokens` thinking budget on older ones |
+| Google | `thinkingLevel` on Gemini 3; a `thinkingBudget` on Gemini 2.5 |
+| Bedrock | Claude thinking config, OpenAI `reasoning_effort`, or a generic `reasoningConfig` by model family |
+| xAI | `reasoning.effort` (`minimal` coerces to low, `xhigh` to high) |
+| Groq | `reasoning_effort` (`xhigh` coerces to high) |
+| DeepSeek | `thinking.type` plus `reasoning_effort` (`xhigh` becomes max) |
+| Fireworks | `reasoning_effort` coerced to its three levels |
+| Mistral | `reasoning_effort` on its reasoning models only |
+
+Providers with no reasoning knob (Perplexity, Cohere) ignore the value.
+
+## Budgets under the hood
+
+Budget-based wires get a number computed by
+`ReasoningEffort.budget(maxOutputTokens:maxBudget:minBudget:)`, which you
+can also call yourself:
+
+```swift
+ReasoningEffort.medium.budget(maxOutputTokens: 64_000, maxBudget: 64_000)
+// 19200 — 30% of the output ceiling
+```
+
+The fractions are `.minimal` 2%, `.low` 10%, `.medium` 30%, `.high` 60%,
+`.xhigh` 90%, clamped to `[1024, maxBudget]`. `.none` and
+`.providerDefault` return `nil`.
+
+### Anthropic, precisely
+
+Claude models split into capability tiers, and the translation follows
+them:
+
+- **Adaptive models** (Sonnet 5, Fable 5, Opus 4.7/4.8, and the 4.6
+  pair) get `thinking.type: "adaptive"` plus `output_config.effort`.
+  `.minimal` coerces to `low`; `.xhigh` stays `xhigh` where supported and
+  becomes `max` on 4.6-generation models.
+- **Everything older** gets `thinking.type: "enabled"` with a
+  `budget_tokens` computed against that model's real output ceiling
+  (64k for the 4.5 family and Sonnet 4, 32k for Opus 4/4.1), and
+  `max_tokens` is raised when the budget would not fit.
+- `.none` sends `thinking.type: "disabled"` explicitly.
+
+### Google, precisely
+
+Gemini 3 models take `thinkingLevel` (`.none` and `.minimal` map to
+`minimal` — thinking can't be fully disabled there; `.xhigh` caps at
+`high`). Everything else takes a `thinkingBudget`: `0` for `.none`,
+otherwise a fraction of the 65,536-token ceiling capped at 32,768 for
+2.5 Pro and 24,576 for the rest.
+
+## Precedence
+
+Reasoning settings inside `providerOptions` always win, and the two are
+never merged. Use the portable parameter by default; drop to
+`providerOptions` when you need an exact budget:
+
+```swift
+let result = try await generateText(
+  model: AnthropicModel("claude-sonnet-4-5"),
+  prompt: prompt,
+  reasoning: .low,   // ignored: the explicit budget below wins
+  providerOptions: [
+    "thinking": ["type": "enabled", "budget_tokens": 12000]
+  ]
+)
+```
+
+<Callout title="Why .providerDefault exists">
+The parameter is a non-optional enum. In an optional parameter,
+`reasoning: .none` would silently resolve to Swift&rsquo;s `Optional.none`
+and mean &ldquo;provider default&rdquo;, the exact opposite of disabling
+reasoning.
+</Callout>
+
+## Extracting reasoning from text
+
+Models that emit `<think>` blocks inline (some open models on Ollama or
+Groq) get the middleware instead:
+
+```swift
+let model = wrapLanguageModel(
+  model: OpenAICompatibleProvider.ollama()("deepseek-r1"),
+  middleware: [.extractReasoning(tag: "think")]
+)
+```

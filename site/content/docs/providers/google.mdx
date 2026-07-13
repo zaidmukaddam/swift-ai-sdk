@@ -1,0 +1,76 @@
+---
+title: Google
+description: Gemini over the native wire, Vertex AI routing, and Gemini Live realtime.
+---
+
+```swift
+let model = GoogleModel("gemini-3.5-flash")
+```
+
+Key from `GOOGLE_GENERATIVE_AI_API_KEY`; base URL
+`https://generativelanguage.googleapis.com/v1beta`.
+
+## Features
+
+- Tools, vision, and file parts on the native `generateContent` wire.
+- Structured output uses constrained decoding
+  (`responseSchema` + `responseMimeType`), not prompt tricks.
+- The `reasoning` parameter maps to `thinkingConfig` (below); thinking
+  streams as `.reasoningDelta`.
+- `usage.cachedInputTokens` reports context-cache hits.
+- Native fields (`safetySettings`, `cachedContent`, ...) pass through
+  `providerOptions` at the top level.
+- Grounding tools have typed builders under `GoogleModel.Tools`
+  — `googleSearch`, `urlContext`, `codeExecution`, `fileSearch`,
+  `enterpriseWebSearch`, `googleMaps` (Gemini 2.0 and newer). Pass them
+  in `tools:` and they run server-side:
+
+```swift
+let result = try await generateText(
+  model: GoogleModel("gemini-3.5-flash"),
+  prompt: "Ground this in current sources.",
+  tools: [GoogleModel.Tools.googleSearch(), GoogleModel.Tools.urlContext()]
+)
+```
+
+## Models
+
+- `gemini-3*` takes `thinkingLevel` — `.none` and `.minimal` both map to
+  `minimal` (thinking can't be fully disabled), `.xhigh` caps at `high`.
+  Exception: `gemini-3-pro-image` stays on budgets.
+- Everything else takes `thinkingBudget`: `0` for `.none`, otherwise a
+  fraction of the 65,536-token ceiling capped at 32,768 (2.5 Pro,
+  `gemini-3-pro-image`) or 24,576 (the rest).
+
+### Current lineup
+
+Language models as of July 2026, newest first:
+
+| Model | Notes |
+| --- | --- |
+| `gemini-3.5-flash` | Newest flash (May 2026) |
+| `gemini-3.1-pro-preview` | Pro preview |
+| `gemini-3.1-flash-lite` | Fast and cheap |
+| `gemini-3-flash`, `gemini-3-pro-preview` | Gemini 3 line |
+| `gemini-3-pro-image` | Image-out model — budget-based thinking |
+| `gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-2.5-flash-lite` | The 2.5 line |
+| `gemma-4-31b-it` | Open-weights Gemma via the same API |
+
+## Vertex AI
+
+```swift
+let vertex = GoogleVertexModel(
+  "gemini-3.5-flash",
+  project: "my-project",      // or GOOGLE_VERTEX_PROJECT
+  location: "us-central1"     // or GOOGLE_VERTEX_LOCATION
+)
+```
+
+Express-mode API keys and bearer `accessToken:` auth both work; the
+request body is identical to the Gemini wire.
+
+## Gemini Live
+
+`GoogleRealtimeModel` connects to the Live API for realtime voice:
+tokens mint against `v1alpha/auth_tokens` and the session config rides
+in the token request. See [Realtime voice](/docs/realtime).

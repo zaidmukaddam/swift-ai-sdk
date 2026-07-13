@@ -1,0 +1,104 @@
+---
+title: Vision and files
+description: Send photos and PDFs, tune sampling, stream reasoning.
+---
+
+Covers `Examples/17-MultimodalAndSettings.swift`. You end up asking
+questions about a photo and reading the model's thinking as it streams.
+
+<Steps>
+<Step>
+### Send an image
+
+Images ride inside the message content and map to each provider's native
+shape automatically:
+
+```swift
+let photo = try Data(contentsOf: photoURL)
+
+let result = try await generateText(
+  model: AnthropicModel("claude-sonnet-5"),
+  messages: [Message(role: .user, content: [
+    .text("What animal is in this photo?"),
+    .image(ImageContent(data: photo))
+  ])]
+)
+print(result.text)
+```
+
+PDFs and other documents use `.file(FileContent(...))` the same way, and
+remote URLs work in place of inline data.
+</Step>
+
+<Step>
+### Tune the sampling
+
+The full settings surface rides on the same call, mapped per provider
+and dropped where a wire lacks the knob:
+
+```swift
+let result = try await generateText(
+  model: OpenAIModel("gpt-5.6-sol"),
+  prompt: "Name a color.",
+  toolChoice: .none,
+  temperature: 0.7,
+  topP: 0.9,
+  topK: 40,
+  presencePenalty: 0.5,
+  frequencyPenalty: 0.3,
+  seed: 42,
+  onFinish: { result in print("used \(result.usage.totalTokens) tokens") },
+  onError: { error in print("failed:", error) }
+)
+```
+</Step>
+
+<Step>
+### Stream the thinking
+
+One `reasoning` value works across providers; the thinking arrives as
+its own deltas:
+
+```swift
+let result = streamText(
+  model: GoogleModel("gemini-3.5-flash"),
+  prompt: "Explain the Riemann hypothesis in simple terms.",
+  reasoning: .high
+)
+for try await part in result.fullStream {
+  if case .reasoningDelta(let thought) = part { showThinking(thought) }
+  if case .textDelta(let text) = part { showAnswer(text) }
+}
+```
+</Step>
+</Steps>
+
+## Final code
+
+```swift title="PhotoQuestion.swift"
+import AI
+import Foundation
+
+func askAboutPhoto(_ photoURL: URL, question: String) async throws -> String {
+  let photo = try Data(contentsOf: photoURL)
+
+  let result = try await generateText(
+    model: AnthropicModel("claude-sonnet-5"),
+    messages: [Message(role: .user, content: [
+      .text(question),
+      .image(ImageContent(data: photo))
+    ])],
+    reasoning: .medium
+  )
+  return result.text
+}
+```
+
+When you need an exact thinking budget instead of a level, use
+`providerOptions`; it always wins over the portable value:
+
+```swift
+providerOptions: [
+  "thinking": ["type": "enabled", "budget_tokens": 12000]
+]
+```

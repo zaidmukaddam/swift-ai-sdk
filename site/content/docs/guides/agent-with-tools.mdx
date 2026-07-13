@@ -1,0 +1,181 @@
+---
+title: An agent with tools
+description: Give the model functions, bound the loop, delegate to subagents.
+---
+
+Covers `Examples/05-Tools.swift`, `10-Agent.swift`, and
+`20-SubagentsAndContext.swift`. You end up with a reusable agent that
+calls your code and knows when to stop.
+
+<Steps>
+<Step>
+### Write a tool
+
+A tool is a name, a description the model reads, a JSON Schema for the
+arguments, and a closure. The loop handles the rest: run, feed back,
+continue.
+
+```swift
+let getTime = Tool(
+  name: "current_time",
+  description: "Returns the current time in a timezone.",
+  parameters: ["type": "object",
+               "properties": ["tz": ["type": "string"]],
+               "required": ["tz"]]
+) { args in
+  .string(Date().formatted())
+}
+```
+
+Prefer typed arguments? Decode them:
+
+```swift
+struct WeatherArgs: Decodable { var city: String }
+
+let weather = Tool.typed(
+  name: "weather",
+  description: "Current weather for a city",
+  parameters: ["type": "object",
+               "properties": ["city": ["type": "string"]],
+               "required": ["city"]]
+) { (args: WeatherArgs) in
+  ["tempC": 31, "city": .string(args.city)]
+}
+```
+</Step>
+
+<Step>
+### Bound the loop
+
+Without a limit the model could ping-pong forever. `stopWhen` caps it:
+
+```swift
+let result = try await generateText(
+  model: AnthropicModel("claude-opus-4-8"),
+  prompt: "What time is it in Asia/Kolkata?",
+  tools: [getTime],
+  stopWhen: [stepCountIs(4)],
+  onStepFinish: { step in print("step:", step.finishReason) }
+)
+print(result.text)
+print("steps: \(result.stepCount)")
+```
+</Step>
+
+<Step>
+### Make it reusable
+
+`Agent` captures the model, instructions, tools, and settings in one
+value you call again and again:
+
+```swift
+let assistant = Agent(
+  model: AnthropicModel("claude-sonnet-5"),
+  instructions: "You are a terse weather assistant.",
+  tools: [weather],
+  stopWhen: [isStepCount(4)]
+)
+
+let result = try await assistant.generate(prompt: "Weather in Mumbai?")
+for try await delta in assistant.stream(prompt: "And in Tokyo?").textStream {
+  print(delta, terminator: "")
+}
+```
+
+An `Agent` is also a chat transport:
+`ChatSession(transport: assistant)` gives you a chat UI over it with no
+server.
+</Step>
+
+<Step>
+### Pass request context without polluting the prompt
+
+User ids and session handles don't belong in the prompt. `toolsContext`
+delivers them straight to the tool:
+
+```swift
+let orders = Tool(
+  name: "list_orders",
+  description: "List recent orders for the signed-in user.",
+  parameters: ["type": "object"]
+) { _, options in
+  let userID = options.context?["userID"]?.stringValue ?? "anonymous"
+  return .string("Orders for \(userID): #1001, #1002")
+}
+
+let result = try await generateText(
+  model: model,
+  prompt: "What did I order recently?",
+  tools: [orders],
+  toolsContext: ["list_orders": ["userID": .string("user-7")]]
+)
+```
+</Step>
+
+<Step>
+### Delegate to subagents
+
+An orchestrator stays small by handing focused work to specialists.
+`asTool` turns any agent into a tool:
+
+```swift
+let researcher = Agent(
+  model: model,
+  instructions: "You research questions and answer with dense facts."
+)
+let writer = Agent(
+  model: model,
+  instructions: "You turn notes into friendly prose."
+)
+
+let orchestrator = Agent(
+  model: model,
+  instructions: "Plan the work, delegate to specialists, then combine.",
+  tools: [
+    researcher.asTool(name: "researcher", description: "Delegate research."),
+    writer.asTool(name: "writer", description: "Delegate drafting.")
+  ]
+)
+```
+</Step>
+</Steps>
+
+## Final code
+
+```swift title="WeatherAgent.swift"
+import AI
+import Foundation
+
+struct WeatherArgs: Decodable { var city: String }
+
+let weather = Tool.typed(
+  name: "weather",
+  description: "Current weather for a city",
+  parameters: ["type": "object",
+               "properties": ["city": ["type": "string"]],
+               "required": ["city"]]
+) { (args: WeatherArgs) in
+  ["tempC": 31, "city": .string(args.city)]
+}
+
+let assistant = Agent(
+  model: AnthropicModel("claude-sonnet-5"),
+  instructions: "You are a terse weather assistant.",
+  tools: [weather],
+  stopWhen: [isStepCount(4)]
+)
+
+func run() async throws {
+  let result = try await assistant.generate(prompt: "Weather in Mumbai?")
+  print(result.text)
+}
+```
+
+One more trick from the examples: `prepareStep` swaps to a cheaper model
+once the expensive one has done the thinking:
+
+```swift
+prepareStep: { context in
+  context.stepNumber >= 3 ? PrepareStepResult(model: cheaperModel) : nil
+}
+```

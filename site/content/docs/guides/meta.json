@@ -1,0 +1,18 @@
+{
+  "title": "Guides",
+  "root": true,
+  "icon": "Map",
+  "pages": [
+    "index",
+    "first-request",
+    "chat-screen",
+    "agent-with-tools",
+    "structured-data",
+    "vision-and-files",
+    "approvals",
+    "voice-assistant",
+    "offline-first",
+    "server-and-testing",
+    "media-and-embeddings"
+  ]
+}

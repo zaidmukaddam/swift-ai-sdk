@@ -1,0 +1,96 @@
+---
+title: Messages and multimodal
+description: Message construction, content parts, vision input, and JSONValue.
+icon: Images
+---
+
+## Messages
+
+A conversation is `[Message]`. Convenience initializers cover the common
+cases; full content arrays cover the rest.
+
+```swift
+var history: [Message] = [
+  .system("You are terse."),
+  .user("What is in this photo?"),
+  .assistant("A lighthouse at dusk.")
+]
+
+// Full control over parts:
+let message = Message(role: .user, content: [
+  .text("Compare these two:"),
+  .image(ImageContent(data: firstJPEG, mediaType: "image/jpeg")),
+  .image(ImageContent(url: secondURL, mediaType: "image/png"))
+])
+```
+
+Roles are `.system`, `.user`, `.assistant`, and `.tool`. The loop manages
+`.tool` turns for you; you only write them when replaying persisted
+history.
+
+## Vision and files
+
+Images and files ride as content parts and map to each provider's native
+shape (`image_url` on OpenAI, base64 `source` on Anthropic, `inlineData`
+on Gemini, content blocks on Bedrock):
+
+```swift
+let result = try await generateText(
+  model: GoogleModel("gemini-3.5-flash"),
+  messages: [Message(role: .user, content: [
+    .text("Summarize this report."),
+    .file(FileContent(data: pdfData, mediaType: "application/pdf", filename: "q3.pdf"))
+  ])]
+)
+```
+
+Both `ImageContent` and `FileContent` take inline `data` or a remote
+`url`. In chat UIs, user attachments arrive as file parts and
+`convertToModelMessages` decodes data URLs into inline bytes
+automatically.
+
+## Content parts
+
+| Part | Carries |
+| --- | --- |
+| `.text(String)` | Plain text |
+| `.image(ImageContent)` | Inline data or URL plus media type |
+| `.file(FileContent)` | Any document, with optional filename |
+| `.toolCall(ToolCall)` | A model-issued call (assistant messages) |
+| `.toolResult(ToolResult)` | An executed result (tool messages) |
+| `.toolApprovalResponse(...)` | A user decision the loop resolves |
+
+## JSONValue
+
+`JSONValue` is the currency for tool arguments, provider options, and
+structured output. It is `ExpressibleBy*Literal`, so it reads like JSON:
+
+```swift
+let arguments: JSONValue = [
+  "city": "Mumbai",
+  "days": 3,
+  "units": ["metric", "imperial"],
+  "detailed": true
+]
+
+arguments["city"]?.stringValue     // "Mumbai"
+arguments["days"]?.intValue        // 3
+arguments["missing"]?.boolValue    // nil
+
+// Decode into Codable whenever you want types:
+struct Query: Decodable { let city: String; let days: Int }
+let query = try arguments.decode(Query.self)
+```
+
+## Usage
+
+Every result carries token accounting, including provider cache and
+reasoning details where the wire reports them:
+
+```swift
+result.usage.inputTokens
+result.usage.outputTokens
+result.usage.totalTokens
+result.usage.cachedInputTokens    // prompt cache hits (OpenAI, Anthropic, Groq, DeepSeek)
+result.usage.reasoningTokens      // thinking tokens (reasoning models)
+```

@@ -1,0 +1,68 @@
+---
+title: On-device models
+description: Apple Foundation Models through the same LanguageModel protocol.
+icon: Cpu
+---
+
+`FoundationModelsModel` runs Apple's on-device model, and optionally
+Private Cloud Compute, through the exact `LanguageModel` protocol as every
+cloud provider. No network, no key, no data leaving the device.
+
+```swift
+let local = FoundationModelsModel()
+
+let result = try await generateText(
+  model: local,
+  prompt: "One-line haiku about rain."
+)
+```
+
+The web can't do this. If you're deciding whether an AI feature belongs
+in your native app or your web app, this is the argument.
+
+## Availability and fallback
+
+On-device availability depends on the device, OS, and Apple Intelligence
+settings. Check it and fall back in one line:
+
+```swift title="ModelPicker.swift"
+let model: any LanguageModel = FoundationModelsModel.isAvailable
+  ? FoundationModelsModel()
+  : AnthropicModel("claude-sonnet-5")
+```
+
+Everything downstream (tools, streaming, structured output, chat
+sessions) is identical for both branches.
+
+## Private Cloud Compute
+
+Requests can target Apple's Private Cloud Compute instead of the
+on-device model:
+
+```swift
+let pcc = FoundationModelsModel(useCase: .privateCloudCompute)
+```
+
+<Callout type="warn">
+PCC requires the `com.apple.developer.private-cloud-compute` entitlement.
+Without it the system call traps instead of throwing, so gate PCC builds
+on provisioned targets only.
+</Callout>
+
+## What works
+
+- `generateText` and `streamText`, including multi-turn history: the pack
+  maintains a Foundation Models `Transcript` across calls.
+- Tools: calls surface through the same loop as every other provider.
+- `generateObject`: guided generation maps your JSON Schema onto the
+  framework's constrained decoding.
+- Chat sessions: `ChatSession(model: FoundationModelsModel())` gives a
+  fully offline chat UI.
+
+## Error taxonomy
+
+Failures arrive as typed errors where the framework provides them
+(guardrail violations, context overflows, unavailable model assets), with
+clear messages for the cases Apple reports only as generic `NSError`s.
+Unentitled processes on some OS builds cannot run on-device inference at
+all; the error message says exactly that instead of a cryptic code.

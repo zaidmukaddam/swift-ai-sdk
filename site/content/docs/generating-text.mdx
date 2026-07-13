@@ -1,0 +1,161 @@
+---
+title: Generating text
+description: generateText, streamText, and the agentic loop underneath them.
+icon: Type
+---
+
+Everything in this library sits on one loop: call the model, run any
+tools it asks for, feed the results back, repeat until it answers.
+`generateText` gives you the finished result; `streamText` hands you
+every event as it happens. Learn this page and the rest of the docs are
+just variations.
+
+## generateText
+
+```swift
+let result = try await generateText(
+  model: model,
+  messages: history,                  // or system: + prompt:
+  tools: [weather],
+  maxSteps: 4
+)
+
+result.text            // final answer
+result.reasoningText   // thinking, when the provider exposes it
+result.toolCalls       // every call across all steps
+result.steps           // one StepResult per model round-trip
+result.messages        // full history including tool turns, ready to persist
+result.usage           // combined token usage
+```
+
+## streamText
+
+Nothing runs until you iterate, and dropping the stream cancels the work.
+
+```swift
+let result = streamText(model: model, prompt: prompt, tools: tools)
+
+for try await part in result.fullStream {
+  switch part {
+  case .textDelta(let delta):        render(delta)
+  case .reasoningDelta(let delta):   renderThinking(delta)
+  case .toolCall(let call):          showToolChip(call)
+  case .toolResult(let result):      updateToolChip(result)
+  case .finishStep(let step):        persist(step)
+  case .finish(let reason, let usage): log(reason, usage)
+  default: break
+  }
+}
+```
+
+`result.textStream` is the same stream reduced to assistant text deltas.
+Consume either stream once; they drive the loop lazily.
+
+### Every stream part
+
+`fullStream` yields `TextStreamPart`, and these are all of its cases:
+
+| Part | When |
+|---|---|
+| `.startStep(index:)` | A model round-trip begins (0-based). |
+| `.textDelta(String)` | Assistant text, token by token. |
+| `.reasoningDelta(String)` | Thinking text, when the provider streams it. |
+| `.toolInputStart(id:name:)` | The model began a tool call; arguments still streaming. |
+| `.toolInputDelta(id:partialJSON:)` | A fragment of the call's JSON arguments. |
+| `.toolCall(ToolCall)` | Arguments fully assembled; execution is about to run. |
+| `.toolResult(ToolResult)` | A tool finished; its output heads back to the model. |
+| `.toolApprovalRequest(...)` | A call is held for the user; the turn ends after this. |
+| `.source(Source)` | A citation from search-backed providers. |
+| `.finishStep(StepResult)` | The round-trip closed; tools for it already ran. |
+| `.finish(finishReason:totalUsage:)` | Terminal event for the whole loop. |
+
+The `toolInputStart`/`toolInputDelta` pair is what lets a UI show a tool
+card filling in while the model is still writing the arguments.
+
+## Steering the loop
+
+```swift
+let result = try await generateText(
+  model: model,
+  prompt: prompt,
+  tools: tools,
+  toolChoice: .required,                 // .auto, .none, .required, .tool("name")
+  activeTools: ["search"],               // visible subset; executors stay registered
+  stopWhen: [.hasToolCall("finalize")],
+  prepareStep: { context in
+    // per-step overrides: swap model, trim messages, change tools
+    context.stepNumber >= 3 ? PrepareStepResult(model: cheaperModel) : nil
+  },
+  onStepFinish: { step in await save(step) }
+)
+```
+
+### Stop conditions
+
+`stopWhen` bounds the loop; the first met condition ends it. Without one,
+`maxSteps` (default 8) applies.
+
+```swift
+stopWhen: [.isStepCount(5)]              // at most 5 round-trips
+stopWhen: [.stepCountIs(5)]              // alias
+stopWhen: [.hasToolCall("finalize")]     // stop once a tool was requested
+stopWhen: [.isLoopFinished]              // only when the model stops calling tools
+stopWhen: [.isStepCount(10), .hasToolCall("submit")]   // whichever first
+```
+
+### Step results
+
+Each round-trip lands in `result.steps` as a `StepResult`:
+
+```swift
+for step in result.steps {
+  step.text               // assistant text this step
+  step.reasoningText      // thinking this step
+  step.toolCalls          // calls issued
+  step.toolResults        // results fed back
+  step.sources            // citations surfaced this step
+  step.approvalRequests   // calls paused for user approval
+  step.finishReason
+  step.usage
+}
+```
+
+`finishReason` is one of `.stop` (natural end of turn), `.length` (hit
+`maxOutputTokens`), `.toolCalls` (the model wants tools), `.contentFilter`,
+`.error`, or `.other`. `usage` carries `inputTokens`, `outputTokens`, and
+`cachedInputTokens` where the provider reports prompt-cache hits.
+
+`prepareStep` runs before each round-trip and can return per-step
+overrides — swap to a cheaper `model`, rewrite `messages` (summarize a
+long history), or narrow `tools`. Return `nil` to keep the step as is.
+
+## Sampling and control
+
+Every knob maps to each provider's native field and is dropped where a wire
+lacks it: `temperature`, `topP`, `topK`, `presencePenalty`,
+`frequencyPenalty`, `seed`, `stopSequences`, `maxOutputTokens`,
+`maxRetries`, plus `onFinish` and `onError` callbacks.
+
+## Reasoning
+
+The portable `reasoning` parameter controls thinking across providers
+with one setting:
+
+```swift
+reasoning: .medium      // .none, .minimal, .low, .medium, .high, .xhigh
+```
+
+[Reasoning](/docs/reasoning) covers streaming thinking, per-provider
+translation, and precedence.
+
+## Provider options
+
+`providerOptions` is the escape hatch for provider-specific fields; it
+merges into the request body last, so it wins over anything the library
+sets:
+
+```swift
+providerOptions: [
+  "thinking": ["type": "enabled", "budget_tokens": 12000]
+]
+```

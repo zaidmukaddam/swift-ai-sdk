@@ -1,0 +1,24 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Xcode project is generated: cd Apps && xcodegen generate
+Apps/SwiftAIApps.xcodeproj/
+Apps/Generated/
+DerivedData/
+xcuserdata/
+
+# macOS
+.DS_Store
+
+# Local agent tooling
+.agents/
+.claude/
+skills-lock.json
+
+# Internal planning docs
+SCOPE.md
+PARITY.md
+
+# Launch video project (Remotion)
+launch/

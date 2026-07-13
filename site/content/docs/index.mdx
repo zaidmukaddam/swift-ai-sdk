@@ -1,0 +1,85 @@
+---
+title: Introduction
+description: AI features for iOS and macOS apps, in plain Swift.
+icon: BookOpen
+---
+
+swift-ai-sdk is a toolkit for building AI features into iOS and macOS apps:
+streaming chat, agents that call your code, structured output, live
+voice, and Apple's on-device models, all behind one small API.
+
+The whole thing in four lines:
+
+```swift
+import AI
+
+let result = try await generateText(
+  model: AnthropicModel("claude-sonnet-5"),
+  prompt: "Why is the sky blue?"
+)
+print(result.text)
+```
+
+Swap `AnthropicModel` for `OpenAIModel`, `GoogleModel`, `XaiModel`, an
+Ollama model on your Mac, or Apple's on-device model. Nothing else
+changes.
+
+If you've built with the AI SDK on the web, everything here will feel
+familiar, down to the streaming protocol: an app built with swift-ai-sdk can
+talk to the `/api/chat` route you already have.
+
+## Coming from the web?
+
+| You know | Here it's |
+| --- | --- |
+| `generateText` / `streamText` | The same calls, with `async`/`await` and `for try await` |
+| zod schemas | A `Schema` DSL that validates output before decoding |
+| `useChat` | `ChatSession`, an `@Observable` object your SwiftUI views watch |
+| Server stream helpers | `UIMessageStream` builders for Swift servers |
+| Realtime | `RealtimeSession` for voice, same providers |
+
+And one thing the web can't do:
+[on-device models](/docs/on-device) answer without a network, a key, or
+your data leaving the phone.
+
+## Start here
+
+<Cards>
+  <Card
+    title="Getting started"
+    description="Add the package and stream a first response in about five minutes."
+    href="/docs/getting-started"
+  />
+  <Card
+    title="Guides"
+    description="Step-by-step builds: a chat screen, an agent, a voice assistant."
+    href="/docs/guides"
+  />
+  <Card
+    title="Generating text"
+    description="The loop that powers everything: steps, tools, streaming."
+    href="/docs/generating-text"
+  />
+  <Card
+    title="Chat UI"
+    description="ChatSession and friends for SwiftUI."
+    href="/docs/chat-ui"
+  />
+  <Card
+    title="Realtime voice"
+    description="Live speech over WebSockets."
+    href="/docs/realtime"
+  />
+  <Card
+    title="On-device models"
+    description="Apple Intelligence through the same API as the cloud."
+    href="/docs/on-device"
+  />
+</Cards>
+
+<Callout>
+Building with a coding agent? Install the
+[swift-ai-sdk skill](/docs/agent-skill) so it writes correct code. Every docs
+page is also raw markdown — append `.mdx` to any URL, or start from
+[/llms.txt](/llms.txt).
+</Callout>

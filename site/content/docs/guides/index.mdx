@@ -1,0 +1,84 @@
+---
+title: Guides
+description: Build real things, step by step, with the final code included.
+icon: Map
+---
+
+Each guide walks one build from empty file to working feature: what to
+add, what to write, and the complete final code. They line up with the
+compiled examples in the repository's `Examples/` folder, which build on
+every CI run, so the code can't rot.
+
+<Cards>
+  <Card
+    title="Your first request"
+    description="Generate, stream, and swap providers. The five-minute one."
+    href="/docs/guides/first-request"
+  />
+  <Card
+    title="A chat screen"
+    description="ChatSession + SwiftUI, against your route or fully local."
+    href="/docs/guides/chat-screen"
+  />
+  <Card
+    title="An agent with tools"
+    description="Give the model functions, bound the loop, delegate to subagents."
+    href="/docs/guides/agent-with-tools"
+  />
+  <Card
+    title="Structured data"
+    description="Typed Codable output, streamed partials, and the Schema DSL."
+    href="/docs/guides/structured-data"
+  />
+  <Card
+    title="Vision and files"
+    description="Send photos and PDFs, tune sampling, stream reasoning."
+    href="/docs/guides/vision-and-files"
+  />
+  <Card
+    title="Human-in-the-loop approvals"
+    description="Dangerous tools pause until the user says yes."
+    href="/docs/guides/approvals"
+  />
+  <Card
+    title="A voice assistant"
+    description="Live speech both ways with a client-side tool."
+    href="/docs/guides/voice-assistant"
+  />
+  <Card
+    title="Offline first"
+    description="Apple Intelligence on device, cloud as the fallback."
+    href="/docs/guides/offline-first"
+  />
+  <Card
+    title="Serving and testing"
+    description="Build UI message streams by hand and test without a network."
+    href="/docs/guides/server-and-testing"
+  />
+  <Card
+    title="Media and embeddings"
+    description="Images, speech, transcription, video, search, reranking."
+    href="/docs/guides/media-and-embeddings"
+  />
+</Cards>
+
+## The example files
+
+Every numbered file in `Examples/` maps to a guide:
+
+| Example | Guide |
+| --- | --- |
+| 01 GenerateText, 02 StreamText, 04 ProviderSwap | [Your first request](/docs/guides/first-request) |
+| 09 ChatSession, 19 SessionHooks | [A chat screen](/docs/guides/chat-screen) |
+| 05 Tools, 10 Agent, 20 SubagentsAndContext | [An agent with tools](/docs/guides/agent-with-tools) |
+| 06 GenerateObject, 07 StreamObject, 18 Schema | [Structured data](/docs/guides/structured-data) |
+| 17 MultimodalAndSettings | [Vision and files](/docs/guides/vision-and-files) |
+| 16 ToolApprovals | [Approvals](/docs/guides/approvals) |
+| 22 Realtime | [A voice assistant](/docs/guides/voice-assistant) |
+| 03 OnDeviceOrCloud | [Offline first](/docs/guides/offline-first) |
+| 21 UIStreamsAndTesting, 11 Middleware | [Serving and testing](/docs/guides/server-and-testing) |
+| 08 Embeddings, 12 Image, 13 Speech, 14 Video, 15 Rerank | [Media and embeddings](/docs/guides/media-and-embeddings) |
+
+There are also two real apps in `Apps/`: a ChatGPT-style chat over local
+Ollama and a voice app for the realtime providers. Both run on the iOS
+simulator with `xcodegen generate`.

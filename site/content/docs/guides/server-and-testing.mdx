@@ -1,0 +1,137 @@
+---
+title: Serving and testing
+description: Build UI message streams by hand, and test without a network.
+---
+
+Covers `Examples/21-UIStreamsAndTesting.swift` and `11-Middleware.swift`.
+You end up serving a chat stream from Swift with status updates woven in,
+and testing the whole thing offline.
+
+<Steps>
+<Step>
+### Build a stream by hand
+
+`UIMessageStream.build` gives you a writer: emit your own chunks, merge
+whole generations, and everything arrives as one response:
+
+```swift
+func chatStream() -> AsyncThrowingStream<UIMessageChunk, Error> {
+  UIMessageStream.build { writer in
+    writer.write(.data(name: "data-status", data: .string("looking things up")))
+
+    let result = streamText(
+      model: AnthropicModel("claude-sonnet-5"),
+      prompt: "Say hello."
+    )
+    writer.merge(UIMessageStream.chunks(from: result.fullStream))
+  }
+}
+```
+
+Encode it as SSE with `UIMessageStream.encodeSSE(chunk)` plus
+`UIMessageStream.headers`, and any web chat UI can consume it.
+</Step>
+
+<Step>
+### Attach metadata
+
+Values ride the start chunk and stream in as the loop runs; the client
+deep-merges them into the message:
+
+```swift
+UIMessageStream.chunks(
+  from: result.fullStream,
+  metadata: .object(["model": .string("claude-sonnet-5")]),
+  messageMetadata: { part in
+    if case .finish(_, let usage) = part {
+      return .object(["totalTokens": .number(Double(usage.totalTokens))])
+    }
+    return nil
+  }
+)
+```
+</Step>
+
+<Step>
+### Read streams anywhere
+
+`readUIMessageStream` turns any chunk stream into `UIMessage` snapshots,
+one per chunk. Persistence pipelines and tests use it instead of a
+session:
+
+```swift
+for try await snapshot in readUIMessageStream(chunks) {
+  print(snapshot.text)
+}
+```
+</Step>
+
+<Step>
+### Test without a network
+
+Add the `AITesting` product to your test target. `MockLanguageModel`
+scripts responses and records every request:
+
+```swift
+import AITesting
+
+func testGreeting() async throws {
+  let model = MockLanguageModel(text: "Hello, world!")
+  let result = try await generateText(model: model, prompt: "Hi")
+  XCTAssertEqual(result.text, "Hello, world!")
+  XCTAssertEqual(model.requests.count, 1)
+}
+```
+
+Multi-step tool loops script with `responses:`, and
+`simulateReadableStream` paces any chunk array like a live stream. The
+[testing page](/docs/testing) has the full kit.
+</Step>
+</Steps>
+
+## Bonus: middleware
+
+Wrap any model to transform requests going in and streams coming out:
+
+```swift title="Middleware.swift"
+let model = wrapLanguageModel(
+  model: OpenAICompatibleProvider.ollama()("qwen3"),
+  middleware: [
+    .extractReasoning(tag: "think"),    // <think> spans become reasoning
+    .defaultSettings(temperature: 0.2)
+  ]
+)
+
+let result = try await generateText(model: model, prompt: "17 * 23?")
+print("thinking:", result.reasoningText)
+print("answer:", result.text)
+```
+
+## Final code
+
+```swift title="ChatRoute.swift"
+import AI
+
+// Vapor, Hummingbird, or anything that writes SSE.
+func serveChat(messages: [UIMessage], response: some SSEWriter) async throws {
+  let history = convertToModelMessages(messages)
+  let result = streamText(
+    model: AnthropicModel("claude-sonnet-5"),
+    messages: history,
+    tools: [weatherTool]
+  )
+
+  let chunks = UIMessageStream.build { writer in
+    writer.write(.data(name: "data-status", data: .string("thinking")))
+    writer.merge(UIMessageStream.chunks(from: result.fullStream))
+  }
+
+  for (field, value) in UIMessageStream.headers {
+    response.setHeader(field, value)
+  }
+  for try await chunk in chunks {
+    try await response.write(UIMessageStream.encodeSSE(chunk))
+  }
+  try await response.write(UIMessageStream.doneSSE)
+}
+```

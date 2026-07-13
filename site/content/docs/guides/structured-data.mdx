@@ -1,0 +1,153 @@
+---
+title: Structured data
+description: Typed Codable output, streamed partials, and the Schema DSL.
+---
+
+Covers `Examples/06-GenerateObject.swift`, `07-StreamObject.swift`, and
+`18-Schema.swift`. You end up with model output you can hand straight to
+your views.
+
+<Steps>
+<Step>
+### Define the type and its schema
+
+```swift
+struct Recipe: Codable {
+  var name: String
+  var ingredients: [String]
+  var steps: [String]
+}
+
+let recipeSchema: JSONValue = [
+  "type": "object",
+  "properties": [
+    "name": ["type": "string"],
+    "ingredients": ["type": "array", "items": ["type": "string"]],
+    "steps": ["type": "array", "items": ["type": "string"]]
+  ],
+  "required": ["name", "ingredients", "steps"]
+]
+```
+</Step>
+
+<Step>
+### Generate the object
+
+```swift
+let result = try await generateObject(
+  model: OpenAIModel("gpt-5.6-sol"),
+  of: Recipe.self,
+  schema: recipeSchema,
+  prompt: "A simple lasagna recipe."
+)
+print(result.object.name, "with", result.object.steps.count, "steps")
+```
+
+If the model produces JSON that doesn't match, the call throws. Your
+views only ever see a valid `Recipe`.
+</Step>
+
+<Step>
+### Stream it for the UI
+
+Partial JSON gets repaired into usable snapshots as it arrives:
+
+```swift
+let result = streamObject(
+  model: model,
+  schema: recipeSchema,
+  prompt: "A simple lasagna recipe."
+)
+
+var latest: JSONValue = .null
+for try await partial in result.partialObjectStream {
+  latest = partial
+  print("so far:", partial["name"]?.stringValue ?? "...")
+}
+let recipe = try latest.decode(Recipe.self)
+```
+</Step>
+
+<Step>
+### Trade the raw schema for the DSL
+
+`Schema` combinators build the JSON Schema and validate the output at
+runtime before decoding:
+
+```swift
+let typedRecipeSchema = Schema.object([
+  "name": .string(description: "Recipe name"),
+  "steps": .array(of: .string(), minItems: 1),
+  "servings": .integer(minimum: 1).optional()
+])
+```
+
+The same schemas type your tools, and arguments get validated before the
+closure runs:
+
+```swift
+let serve = Tool(
+  name: "serve",
+  description: "Serve a number of portions",
+  parameters: Schema.object(["servings": .integer(minimum: 1)])
+) { args in
+  .string("served \(args["servings"]?.intValue ?? 0)")
+}
+```
+</Step>
+</Steps>
+
+## Final code
+
+```swift title="RecipeGenerator.swift"
+import AI
+
+struct Recipe: Codable {
+  var name: String
+  var ingredients: [String]
+  var steps: [String]
+}
+
+let recipeSchema = Schema.object([
+  "name": .string(description: "Recipe name"),
+  "ingredients": .array(of: .string(), minItems: 1),
+  "steps": .array(of: .string(), minItems: 1)
+])
+
+func generateRecipe() async throws -> Recipe {
+  let result = try await generateObject(
+    model: OpenAIModel("gpt-5.6-sol"),
+    of: Recipe.self,
+    schema: recipeSchema,
+    prompt: "A simple lasagna recipe."
+  )
+  return result.object
+}
+
+func streamRecipe(into render: @escaping (JSONValue) -> Void) async throws -> Recipe {
+  let result = streamObject(
+    model: OpenAIModel("gpt-5.6-sol"),
+    schema: recipeSchema,
+    prompt: "A simple lasagna recipe."
+  )
+  var latest: JSONValue = .null
+  for try await partial in result.partialObjectStream {
+    latest = partial
+    render(partial)
+  }
+  return try latest.decode(Recipe.self)
+}
+```
+
+Enums and unions compose when the shapes get richer:
+
+```swift
+let event = Schema.object([
+  "kind": .enum(["meeting", "reminder"]),
+  "when": .string(format: "date-time"),
+  "attendees": .array(of: .object([
+    "name": .string(),
+    "id": .anyOf([.integer(), .string()])
+  ])).optional()
+])
+```
