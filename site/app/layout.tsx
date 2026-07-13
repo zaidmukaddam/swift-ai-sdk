@@ -4,6 +4,9 @@ import { Google_Sans_Flex } from 'next/font/google';
 
 const googleSansFlex = Google_Sans_Flex({
   subsets: ['latin'],
+  display: 'swap',
+  adjustFontFallback: false,
+  fallback: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
 });
 
 export default function Layout({ children }: LayoutProps<'/'>) {
