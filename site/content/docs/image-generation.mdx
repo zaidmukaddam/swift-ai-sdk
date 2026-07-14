@@ -1,0 +1,59 @@
+---
+title: Image generation
+description: Generate and edit images with a shared ImageModel API.
+icon: Image
+---
+
+Every image provider conforms to `ImageModel` and works with
+`generateImage`.
+
+```swift
+let result = try await generateImage(
+  model: OpenAIImageModel("gpt-image-2"),
+  prompt: "A watercolor fox in a snowy forest",
+  size: "1024x1024"
+)
+
+try result.image.write(to: outputURL)
+```
+
+`result.image` is the first image as `Data`. The complete response is in
+`result.images`, and providers that rewrite prompts report them in
+`result.revisedPrompts`.
+
+## Edit an image
+
+Pass source images through the same call. OpenAI automatically switches to its
+edits endpoint.
+
+```swift
+let edited = try await generateImage(
+  model: OpenAIImageModel("gpt-image-2"),
+  prompt: "Make the sky stormy",
+  images: [ImageContent(data: source, mediaType: "image/png")]
+)
+```
+
+## Options
+
+The shared options are `n`, `size`, `aspectRatio`, `seed`, `maxRetries`, and
+`providerOptions`. Providers use the settings they support:
+
+```swift
+let result = try await generateImage(
+  model: FalImageModel("fal-ai/flux/schnell"),
+  prompt: "An isometric library at night",
+  aspectRatio: "16:9",
+  seed: 42,
+  providerOptions: ["fal": ["num_inference_steps": 4]]
+)
+```
+
+## Models
+
+| Provider | Model type | Key |
+| --- | --- | --- |
+| [OpenAI](/docs/providers/openai) | `OpenAIImageModel` | `OPENAI_API_KEY` |
+| [fal](/docs/providers/fal) | `FalImageModel` | `FAL_API_KEY` or `FAL_KEY` |
+| [Luma](/docs/providers/luma) | `LumaImageModel` | `LUMA_API_KEY` |
+| [Replicate](/docs/providers/replicate) | `ReplicateImageModel` | `REPLICATE_API_TOKEN` |

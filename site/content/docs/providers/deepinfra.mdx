@@ -1,0 +1,31 @@
+---
+title: DeepInfra
+description: Run DeepInfra chat models through a dedicated Swift provider pack.
+---
+
+`DeepInfraModel` reads `DEEPINFRA_API_KEY` and targets
+`https://api.deepinfra.com/v1/openai`.
+
+```swift
+let model = DeepInfraModel("deepseek-ai/DeepSeek-V4-Pro")
+let result = try await generateText(model: model, prompt: "Say hello.")
+print(result.text)
+```
+
+The `/openai` segment is part of the default base URL. Override `apiKey:`,
+`baseURL:`, `headers:`, or `urlSession:` directly on the model when needed.
+
+## Models
+
+DeepInfra's live catalog currently includes models such as:
+
+| Model ID |
+| --- |
+| `deepseek-ai/DeepSeek-V4-Pro` |
+| `stepfun-ai/Step-3.7-Flash` |
+| `MiniMaxAI/MiniMax-M2.7` |
+| `Qwen/Qwen3.5-9B` |
+
+Use DeepInfra's [model catalog](https://docs.deepinfra.com/models) or
+[`GET /models/list`](https://api.deepinfra.com/models/list) for the complete,
+current list.

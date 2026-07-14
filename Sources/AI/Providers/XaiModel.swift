@@ -537,7 +537,7 @@ public struct XaiModel: LanguageModel {
 
 public extension XaiModel {
     enum Tools {
-        static func webSearch(
+        public static func webSearch(
             allowedDomains: [String]? = nil,
             excludedDomains: [String]? = nil,
             enableImageSearch: Bool? = nil,
@@ -556,7 +556,7 @@ public extension XaiModel {
             )
         }
 
-        static func xSearch(
+        public static func xSearch(
             allowedXHandles: [String]? = nil,
             excludedXHandles: [String]? = nil,
             fromDate: String? = nil,
@@ -581,14 +581,14 @@ public extension XaiModel {
             )
         }
 
-        static func codeExecution(name: String = "code_interpreter") -> ProviderDefinedTool {
+        public static func codeExecution(name: String = "code_interpreter") -> ProviderDefinedTool {
             ProviderDefinedTool(
                 provider: "xai", id: "xai.code_execution", name: name,
                 args: .object(["type": "code_interpreter"])
             )
         }
 
-        static func fileSearch(
+        public static func fileSearch(
             vectorStoreIds: [String],
             maxNumResults: Int? = nil,
             name: String = "file_search"
@@ -603,7 +603,7 @@ public extension XaiModel {
             )
         }
 
-        static func mcpServer(
+        public static func mcpServer(
             serverUrl: String,
             serverLabel: String? = nil,
             serverDescription: String? = nil,
@@ -625,14 +625,14 @@ public extension XaiModel {
             )
         }
 
-        static func viewImage(name: String = "view_image") -> ProviderDefinedTool {
+        public static func viewImage(name: String = "view_image") -> ProviderDefinedTool {
             ProviderDefinedTool(
                 provider: "xai", id: "xai.view_image", name: name,
                 args: .object(["type": "view_image"])
             )
         }
 
-        static func viewXVideo(name: String = "view_x_video") -> ProviderDefinedTool {
+        public static func viewXVideo(name: String = "view_x_video") -> ProviderDefinedTool {
             ProviderDefinedTool(
                 provider: "xai", id: "xai.view_x_video", name: name,
                 args: .object(["type": "view_x_video"])

@@ -10,7 +10,13 @@
     "structured-data",
     "vision-and-files",
     "approvals",
+    "search-and-server-tools",
     "voice-assistant",
+    "transcribe-and-summarize",
+    "image-and-video-pipeline",
+    "semantic-search",
+    "custom-endpoints",
+    "production-reliability",
     "offline-first",
     "server-and-testing",
     "media-and-embeddings"

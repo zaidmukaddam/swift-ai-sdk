@@ -1,0 +1,51 @@
+---
+title: Transcription
+description: Turn audio into text with a shared TranscriptionModel API.
+icon: AudioWaveform
+---
+
+Every transcription provider conforms to `TranscriptionModel` and works with
+`transcribe`.
+
+```swift
+let result = try await transcribe(
+  model: OpenAITranscriptionModel("whisper-1"),
+  audio: audioData,
+  mediaType: "audio/mpeg"
+)
+
+print(result.text)
+for segment in result.segments {
+  print("\(segment.startSecond)s–\(segment.endSecond)s", segment.text)
+}
+```
+
+Results include the text plus segments, detected language, and duration when
+the provider returns them. Native request fields go in `providerOptions`:
+
+```swift
+let result = try await transcribe(
+  model: OpenAITranscriptionModel("whisper-1"),
+  audio: audioData,
+  mediaType: "audio/wav",
+  providerOptions: ["openai": ["language": "en", "temperature": 0]]
+)
+```
+
+AssemblyAI, Rev.ai, and Gladia are asynchronous upstream. Their model types
+submit, poll, and fetch internally, so your call remains a single `await`.
+
+## Models
+
+| Provider | Model type | Default or example model | Key |
+| --- | --- | --- | --- |
+| [OpenAI](/docs/providers/openai) | `OpenAITranscriptionModel` | `whisper-1` | `OPENAI_API_KEY` |
+| [ElevenLabs](/docs/providers/elevenlabs) | `ElevenLabsTranscriptionModel` | `scribe_v2` | `ELEVENLABS_API_KEY` |
+| [Deepgram](/docs/providers/deepgram) | `DeepgramTranscriptionModel` | `nova-3` | `DEEPGRAM_API_KEY` |
+| [AssemblyAI](/docs/providers/assemblyai) | `AssemblyAITranscriptionModel` | `universal-3-5-pro` | `ASSEMBLYAI_API_KEY` |
+| [Rev.ai](/docs/providers/rev-ai) | `RevAITranscriptionModel` | `machine` | `REVAI_API_KEY` |
+| [Gladia](/docs/providers/gladia) | `GladiaTranscriptionModel` | `solaria-1` | `GLADIA_API_KEY` |
+| [Sarvam](/docs/providers/sarvam) | `SarvamTranscriptionModel` | `saaras:v3` | `SARVAM_API_KEY` |
+
+Groq-hosted Whisper also works through `OpenAITranscriptionModel` with Groq's
+base URL; see the [Groq provider page](/docs/providers/groq#models).

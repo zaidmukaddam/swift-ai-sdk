@@ -1,0 +1,32 @@
+---
+title: Together AI
+description: Run Together AI models through a first-class Swift provider pack.
+---
+
+`TogetherAIModel` reads `TOGETHER_API_KEY` and targets
+`https://api.together.xyz/v1`.
+
+```swift
+let model = TogetherAIModel("MiniMaxAI/MiniMax-M3")
+let result = try await generateText(model: model, prompt: "Say hello.")
+print(result.text)
+```
+
+Pass `apiKey:`, `baseURL:`, `headers:`, or `urlSession:` to override the
+defaults. Tools, structured output, vision, and `reasoning` use the shared
+chat-completions wire and depend on the selected model.
+
+## Models
+
+Current serverless chat models include:
+
+| Model ID |
+| --- |
+| `MiniMaxAI/MiniMax-M3` |
+| `Qwen/Qwen3.7-Max` |
+| `deepseek-ai/DeepSeek-V4-Pro` |
+| `openai/gpt-oss-120b` |
+
+See Together's live [serverless model list](https://docs.together.ai/docs/serverless/models)
+and [recommended models](https://docs.together.ai/docs/inference/recommended-models)
+for availability and capability details.

@@ -30,7 +30,7 @@ If you have [Ollama](https://ollama.com) on your Mac:
 ```swift title="FirstStream.swift"
 import AI
 
-let model = OpenAICompatibleProvider.ollama()("granite4.1:3b")
+let model = OllamaModel("granite4.1:3b")
 
 let result = streamText(
   model: model,

@@ -1,0 +1,57 @@
+---
+title: Deepgram
+description: Aura speech synthesis and Nova transcription.
+---
+
+`DEEPGRAM_API_KEY` powers both Deepgram model types.
+
+## Speech
+
+```swift
+let result = try await generateSpeech(
+  model: DeepgramSpeechModel(), // aura-2-thalia-en
+  text: "The next train arrives in five minutes.",
+  outputFormat: "mp3"
+)
+```
+
+The model ID selects the Aura voice. See
+[speech generation](/docs/speech-generation) for the shared API.
+
+## Transcription
+
+```swift
+let result = try await transcribe(
+  model: DeepgramTranscriptionModel(), // nova-3
+  audio: audioData,
+  mediaType: "audio/wav"
+)
+```
+
+`DeepgramTranscriptionModel` defaults to `nova-3` and returns word-level
+segments when Deepgram supplies them. It uploads the audio synchronously to
+the listening endpoint. See [transcription](/docs/transcription) for the common
+result shape.
+
+Both models use `https://api.deepgram.com` by default.
+
+## Models
+
+### Speech models
+
+Aura 2 model IDs include both the voice and language, using the form
+`aura-2-{voice}-{language}`. The SDK defaults to `aura-2-thalia-en`; browse
+Deepgram's [Aura model and voice list](https://developers.deepgram.com/docs/tts-models)
+for the other current IDs.
+
+### Transcription models
+
+| Model ID | Use |
+| --- | --- |
+| `nova-3` | Current general prerecorded STT model |
+| `nova-2` | Previous Nova generation |
+| `whisper` | Hosted Whisper option |
+
+Deepgram also offers models specialized for streaming voice agents. See the
+official [speech-to-text model overview](https://developers.deepgram.com/docs/model)
+for mode and language compatibility.

@@ -3,27 +3,43 @@ import XCTest
 
 final class ProviderConfigTests: XCTestCase {
 
-    func testPresetBaseURLsMatchTheAISDK() {
-        let expected: [(OpenAICompatibleProvider, String, String)] = [
-            (.togetherAI(apiKey: "k"), "togetherai", "https://api.together.xyz/v1"),
-            (.fireworks(apiKey: "k"), "fireworks", "https://api.fireworks.ai/inference/v1"),
-            (.cerebras(apiKey: "k"), "cerebras", "https://api.cerebras.ai/v1"),
-            (.openRouter(apiKey: "k"), "openrouter", "https://openrouter.ai/api/v1"),
-            (.ollama(), "ollama", "http://localhost:11434/v1"),
-            (.lmStudio(), "lmstudio", "http://localhost:1234/v1")
+    func testFirstClassCompatibleModelDefaults() {
+        let expected: [(OpenAIChatModel, String, String)] = [
+            (TogetherAIModel("m", apiKey: "k").engine,
+             "togetherai", "https://api.together.xyz/v1/chat/completions"),
+            (FireworksModel("m", apiKey: "k").engine,
+             "fireworks", "https://api.fireworks.ai/inference/v1/chat/completions"),
+            (CerebrasModel("m", apiKey: "k").engine,
+             "cerebras", "https://api.cerebras.ai/v1/chat/completions"),
+            (OpenRouterModel("m", apiKey: "k").engine,
+             "openrouter", "https://openrouter.ai/api/v1/chat/completions"),
+            (DeepInfraModel("m", apiKey: "k").engine,
+             "deepinfra", "https://api.deepinfra.com/v1/openai/chat/completions"),
+            (BasetenModel("m", apiKey: "k").engine,
+             "baseten", "https://inference.baseten.co/v1/chat/completions"),
+            (VercelModel("m", apiKey: "k").engine,
+             "vercel", "https://api.v0.dev/v1/chat/completions"),
+            (AIGatewayModel("m", apiKey: "k").engine,
+             "gateway", "https://ai-gateway.vercel.sh/v1/chat/completions"),
+            (SarvamModel("m", apiKey: "k").engine,
+             "sarvam", "https://api.sarvam.ai/v1/chat/completions"),
+            (OllamaModel("m").engine,
+             "ollama", "http://localhost:11434/v1/chat/completions"),
+            (LMStudioModel("m").engine,
+             "lmstudio", "http://localhost:1234/v1/chat/completions")
         ]
-        for (provider, name, url) in expected {
-            XCTAssertEqual(provider.name, name)
-            XCTAssertEqual(provider.baseURL.absoluteString, url, "base URL drifted for \(name)")
+        for (engine, provider, url) in expected {
+            XCTAssertEqual(engine.provider, provider)
+            XCTAssertEqual(engine.requestURL(path: "chat/completions").absoluteString, url)
         }
     }
 
-    func testVendedModelCarriesProviderNameAndURL() {
-        let llama = OpenAICompatibleProvider.togetherAI(apiKey: "k")("llama-3.3")
+    func testTogetherAIModelCarriesProviderNameAndURL() {
+        let llama = TogetherAIModel("llama-3.3", apiKey: "k")
         XCTAssertEqual(llama.provider, "togetherai")
         XCTAssertEqual(llama.modelID, "llama-3.3")
         XCTAssertEqual(
-            llama.requestURL(path: "chat/completions").absoluteString,
+            llama.engine.requestURL(path: "chat/completions").absoluteString,
             "https://api.together.xyz/v1/chat/completions"
         )
     }
@@ -41,8 +57,12 @@ final class ProviderConfigTests: XCTestCase {
         )
     }
 
-    func testProviderVendsEmbeddingModels() {
-        let embed = OpenAICompatibleProvider.togetherAI(apiKey: "k")
+    func testCustomProviderVendsEmbeddingModels() {
+        let embed = OpenAICompatibleProvider(
+            name: "togetherai",
+            baseURL: URL(string: "https://api.together.xyz/v1")!,
+            apiKey: "k"
+        )
             .textEmbeddingModel("BAAI/bge-large-en-v1.5")
         XCTAssertEqual(embed.provider, "togetherai")
         XCTAssertEqual(embed.modelID, "BAAI/bge-large-en-v1.5")

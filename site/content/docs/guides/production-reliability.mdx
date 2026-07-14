@@ -1,0 +1,182 @@
+---
+title: Production reliability
+description: Add retries, caching, telemetry, typed errors, cancellation, and safe fallback.
+---
+
+Covers `Examples/Features/11-Middleware.swift` and
+`23-WorkflowGuides.swift`. The goal is a request path that tolerates transient
+provider failures without hiding invalid requests or duplicating streamed
+output.
+
+<Steps>
+<Step>
+### Retry transient failures
+
+Every generation API has `maxRetries`. The default is two retries after the
+initial attempt. Retries use exponential backoff for timeouts, conflicts,
+rate limits, transport failures, and server errors.
+
+```swift
+let result = try await generateText(
+  model: OpenAIModel("gpt-5.6-sol"),
+  prompt: prompt,
+  maxRetries: 4
+)
+```
+
+Only stream establishment is retried. Once a stream has delivered output, it
+is never restarted, so users do not receive duplicated tokens.
+</Step>
+
+<Step>
+### Apply defaults and cache exact repeats
+
+Middleware can make policy reusable across every call:
+
+```swift
+let model = wrapLanguageModel(
+  model: OpenAIModel("gpt-5.6-sol"),
+  middleware: [
+    .cache(),
+    .defaultSettings(temperature: 0.2, maxOutputTokens: 2_000)
+  ]
+)
+```
+
+The built-in cache is process-local. Supply a `LanguageModelCache`
+implementation backed by disk or your server-side cache when results must
+survive a restart.
+</Step>
+
+<Step>
+### Observe completions and failures
+
+Per-call callbacks are convenient for usage accounting:
+
+```swift
+let result = try await generateText(
+  model: model,
+  prompt: prompt,
+  onFinish: { result in
+    print("tokens", result.usage.totalTokens)
+  },
+  onError: { error in
+    print("generation failed", error)
+  }
+)
+```
+
+For process-wide timing, install an `AITelemetryCollector`:
+
+```swift
+struct ConsoleCollector: AITelemetryCollector {
+  func record(_ event: AITelemetryEvent) {
+    print(event.name, event.phase.rawValue, event.duration)
+  }
+}
+AITelemetry.collector = ConsoleCollector()
+```
+
+Avoid recording prompts, tool results, API keys, or provider response bodies
+unless your privacy policy explicitly allows it.
+</Step>
+
+<Step>
+### Handle typed errors
+
+```swift
+do {
+  return try await generateText(model: model, prompt: prompt).text
+} catch let AIError.http(status, body) {
+  print("provider HTTP error", status, body)
+  throw AIError.http(status: status, body: body)
+} catch AIError.noObjectGenerated(let raw) {
+  print("structured response was invalid", raw)
+  throw AIError.noObjectGenerated(raw)
+}
+```
+
+Invalid requests, decoding problems, and authentication errors should surface
+to your logs or UI. Blindly sending them to another provider usually repeats
+the same bug.
+</Step>
+
+<Step>
+### Fall back only for transient failures
+
+```swift
+func isTransient(_ error: Error) -> Bool {
+  switch error {
+  case AIError.http(let status, _):
+    return status == 408 || status == 409 || status == 429 || (500..<600).contains(status)
+  case AIError.transport, is URLError:
+    return true
+  default:
+    return false
+  }
+}
+```
+
+Then attempt a second provider only for those cases. Keep the same system
+prompt and tools, but remember that provider-native options are not portable.
+</Step>
+
+<Step>
+### Preserve cancellation
+
+Dropping a stream cancels its underlying task. In UI code, keep the consuming
+`Task` and cancel it when the user taps Stop or leaves the screen. Do not catch
+and convert cancellation into a provider fallback.
+</Step>
+</Steps>
+
+## Final code
+
+```swift title="ReliableGeneration.swift"
+import AI
+import Foundation
+
+struct ConsoleCollector: AITelemetryCollector {
+  func record(_ event: AITelemetryEvent) {
+    print(event.name, event.phase.rawValue, event.duration)
+  }
+}
+
+func isTransient(_ error: Error) -> Bool {
+  switch error {
+  case AIError.http(let status, _):
+    return status == 408 || status == 409 || status == 429 || (500..<600).contains(status)
+  case AIError.transport:
+    return true
+  case is URLError:
+    return true
+  default:
+    return false
+  }
+}
+
+func reliableAnswer(_ prompt: String) async throws -> String {
+  AITelemetry.collector = ConsoleCollector()
+  let primary = wrapLanguageModel(
+    model: OpenAIModel("gpt-5.6-sol"),
+    middleware: [.cache(), .defaultSettings(temperature: 0.2)]
+  )
+
+  do {
+    return try await generateText(
+      model: primary,
+      prompt: prompt,
+      maxRetries: 4
+    ).text
+  } catch where isTransient(error) {
+    return try await generateText(
+      model: AnthropicModel("claude-sonnet-5"),
+      prompt: prompt,
+      maxRetries: 2
+    ).text
+  }
+}
+```
+
+See [Advanced](/docs/advanced) for custom middleware, persistent cache
+adapters, all telemetry spans, and the complete error list.

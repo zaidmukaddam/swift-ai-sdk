@@ -1,0 +1,35 @@
+---
+title: AssemblyAI
+description: Asynchronous audio transcription behind one await.
+---
+
+`AssemblyAITranscriptionModel` conforms to `TranscriptionModel` and works with
+[`transcribe`](/docs/transcription).
+
+```swift
+let result = try await transcribe(
+  model: AssemblyAITranscriptionModel(), // universal-3-5-pro
+  audio: audioData,
+  mediaType: "audio/mpeg"
+)
+print(result.text)
+```
+
+The model reads `ASSEMBLYAI_API_KEY`, defaults to `universal-3-5-pro`, and
+uses `https://api.assemblyai.com`. It uploads the audio, creates a
+transcript, and polls until completion internally.
+
+Use `pollInterval` and `pollTimeout` on the model initializer to tune polling.
+AssemblyAI-specific transcript settings can be passed through
+`providerOptions`.
+
+## Models
+
+| Model ID | Use |
+| --- | --- |
+| `universal-3-5-pro` | Current highest-accuracy Universal model |
+| `universal-2` | Previous Universal generation |
+
+Availability can vary by API mode and language. See AssemblyAI's
+[Universal-3.5 Pro guide](https://www.assemblyai.com/docs/getting-started/universal-3-5-pro.md)
+and the [`speech_model` API field](https://www.assemblyai.com/docs/api-reference/transcripts/submit.md).

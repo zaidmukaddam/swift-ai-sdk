@@ -13,7 +13,7 @@ public actor MCPClient {
     }
 
     public func connect(
-        clientName: String = "swift-ai-sdk", clientVersion: String = "0.1.0"
+        clientName: String = "swift-ai-sdk", clientVersion: String = "0.1.1"
     ) async throws {
         guard !initialized else { return }
         _ = try await request(method: "initialize", params: .object([

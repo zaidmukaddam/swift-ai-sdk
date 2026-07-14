@@ -1,0 +1,166 @@
+---
+title: Search and server tools
+description: Combine your Swift tools with provider-hosted search, files, and code execution.
+---
+
+Covers the provider tool examples in `Examples/Providers/OpenAI/`,
+`Anthropic/`, `Google/`, and `xAI/`, plus
+`Examples/Features/23-WorkflowGuides.swift`.
+
+Local function tools run your Swift closure. Server tools run inside the
+provider's infrastructure. Both conform to the same tool protocol and can be
+passed to `generateText` or `streamText` together.
+
+<Steps>
+<Step>
+### Start with a local function tool
+
+```swift
+struct WeatherArgs: Decodable { let city: String }
+
+let weather = Tool.typed(
+  name: "get_weather",
+  description: "Get the current weather for a city from Open-Meteo.",
+  parameters: [
+    "type": "object",
+    "properties": ["city": ["type": "string"]],
+    "required": ["city"]
+  ]
+) { (arguments: WeatherArgs) in
+  try await OpenMeteoWeather.current(city: arguments.city)
+}
+```
+
+The agentic loop executes this closure locally and feeds its result back to
+the model. `OpenMeteoWeather` is the compile-checked geocoding and current
+forecast client used throughout the examples; see
+[An agent with tools](/docs/guides/agent-with-tools).
+</Step>
+
+<Step>
+### Add provider-hosted tools
+
+```swift
+let tools: [any AIToolProtocol] = [
+  weather,
+  OpenAIModel.Tools.webSearch(allowedDomains: ["swift.org"]),
+  OpenAIModel.Tools.codeInterpreter()
+]
+
+let result = try await generateText(
+  model: OpenAIModel("gpt-5.6-sol"),
+  prompt: "Find the latest stable Swift release and compare its number with 5.9.",
+  tools: tools,
+  stopWhen: [stepCountIs(6)]
+)
+```
+
+Domain restrictions and resource ids should be as narrow as the task allows.
+</Step>
+
+<Step>
+### Render citations
+
+Providers that expose citations emit them as sources:
+
+```swift
+print(result.text)
+for source in result.sources {
+  print(source.title ?? source.url, source.url)
+}
+```
+
+For streaming UIs, watch `fullStream` for `.source` parts and attach them to
+the answer as they arrive.
+</Step>
+
+<Step>
+### Choose the provider catalog
+
+Each provider has its own server-side capabilities:
+
+| Provider | Builders available in Swift AI |
+| --- | --- |
+| OpenAI | Web search, web-search preview, file search, code interpreter |
+| Anthropic | Web search, web fetch, code execution, bash, text editor, computer, memory |
+| Google | Google Search, URL context, code execution, enterprise web search, Maps, file search |
+| xAI | Web search, X search, code execution, file search, MCP server, image and X-video viewing |
+
+```swift
+let anthropicTools: [any AIToolProtocol] = [
+  AnthropicModel.Tools.webSearch(allowedDomains: ["swift.org"]),
+  AnthropicModel.Tools.webFetch(allowedDomains: ["swift.org"]),
+  AnthropicModel.Tools.codeExecution()
+]
+```
+
+Builder arguments are provider-native. A vector-store id from OpenAI, for
+example, cannot be passed to Google's file-search builder.
+</Step>
+
+<Step>
+### Use search-native providers when tools are unnecessary
+
+Perplexity searches as part of ordinary generation, while xAI can also take
+search configuration through provider options:
+
+```swift
+let result = try await generateText(
+  model: PerplexityModel("sonar-pro"),
+  prompt: "What changed in the latest Swift release?"
+)
+for source in result.sources { print(source.url) }
+```
+
+Use this shape when the whole request is research. Use explicit tools when
+the model must decide whether to search among several possible actions.
+</Step>
+
+<Step>
+### Treat powerful tools as privileged operations
+
+Code execution, shell access, computer use, and external MCP servers can
+touch data outside the prompt. Restrict domains and resources, separate
+trusted from untrusted content, and place user approval in front of dangerous
+local actions. See [Human-in-the-loop approvals](/docs/guides/approvals).
+</Step>
+</Steps>
+
+## Final code
+
+```swift title="ResearchAssistant.swift"
+import AI
+
+struct WeatherArgs: Decodable { let city: String }
+
+let weather = Tool.typed(
+  name: "get_weather",
+  description: "Get the current weather for a city from Open-Meteo.",
+  parameters: [
+    "type": "object",
+    "properties": ["city": ["type": "string"]],
+    "required": ["city"]
+  ]
+) { (arguments: WeatherArgs) in
+  try await OpenMeteoWeather.current(city: arguments.city)
+}
+
+func research(_ question: String) async throws -> GenerateTextResult {
+  let tools: [any AIToolProtocol] = [
+    weather,
+    OpenAIModel.Tools.webSearch(allowedDomains: ["swift.org"]),
+    OpenAIModel.Tools.codeInterpreter()
+  ]
+
+  return try await generateText(
+    model: OpenAIModel("gpt-5.6-sol"),
+    prompt: question,
+    tools: tools,
+    stopWhen: [stepCountIs(6)]
+  )
+}
+```
+
+The complete builder catalogs live in the [OpenAI](/docs/providers/openai),
+[Anthropic](/docs/providers/anthropic), [Google](/docs/providers/google), and
+[xAI](/docs/providers/xai) provider pages.

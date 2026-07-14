@@ -1,0 +1,59 @@
+---
+title: Files and skills
+description: Upload provider-hosted files and reusable Anthropic skills.
+icon: BookOpen
+---
+
+Swift AI includes focused clients for provider resources that live outside a
+model request.
+
+## OpenAI files
+
+```swift
+let files = OpenAIFiles() // OPENAI_API_KEY
+let uploaded = try await files.upload(
+  data: pdf,
+  filename: "report.pdf",
+  purpose: "user_data",
+  mediaType: "application/pdf"
+)
+
+print(uploaded.id)
+try await files.delete(id: uploaded.id)
+```
+
+`OpenAIFiles` uses `https://api.openai.com/v1` by default. The returned
+`UploadedFile` contains the provider ID plus filename and size when available.
+See the [OpenAI provider page](/docs/providers/openai) for model APIs.
+
+## Anthropic files
+
+```swift
+let uploaded = try await AnthropicFiles().upload(
+  data: pdf,
+  filename: "report.pdf",
+  mediaType: "application/pdf"
+)
+```
+
+`AnthropicFiles` reads `ANTHROPIC_API_KEY` and adds the required Files API beta
+header. See the [Anthropic provider page](/docs/providers/anthropic).
+
+## Anthropic skills
+
+Upload a `SKILL.md` folder as reusable provider-hosted content:
+
+```swift
+let skill = try await AnthropicSkills().upload(
+  files: [
+    SkillFile(path: "brand-guide/SKILL.md", data: skillMarkdown),
+    SkillFile(path: "brand-guide/references/tone.md", data: toneGuide),
+  ],
+  displayTitle: "Brand guide"
+)
+
+print(skill.id)
+```
+
+Paths are preserved in the multipart upload. `AnthropicSkills` handles the
+required Skills API beta header.

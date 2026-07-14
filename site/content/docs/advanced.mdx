@@ -11,7 +11,7 @@ cover the common cases:
 
 ```swift
 let model = wrapLanguageModel(
-  model: OpenAICompatibleProvider.ollama()("qwen3"),
+  model: OllamaModel("qwen3"),
   middleware: [
     .cache(),                          // replay identical requests
     .extractReasoning(tag: "think"),   // lift <think> spans into reasoning
@@ -77,6 +77,9 @@ Bridged tools validate arguments against the server's schemas and return
 results into the same loop as local tools.
 
 ## File and skill uploads
+
+See [Files and skills](/docs/files-and-skills) for the full OpenAI Files,
+Anthropic Files, and Anthropic Skills APIs.
 
 ```swift
 // OpenAI Files API

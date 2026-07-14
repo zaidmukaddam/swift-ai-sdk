@@ -1,0 +1,33 @@
+---
+title: Vercel
+description: Generate with Vercel's v0 model endpoint from Swift.
+---
+
+`VercelModel` reads `V0_API_KEY` and targets `https://api.v0.dev/v1`.
+
+```swift
+let model = VercelModel("v0-1.5-lg")
+let result = try await generateText(model: model, prompt: "Build a settings screen.")
+print(result.text)
+```
+
+Use `baseURL:`, `headers:`, and `urlSession:` for proxy or test overrides.
+This pack uses the shared chat-completions transport.
+
+## Models
+
+The last officially published OpenAI-compatible v0 family is:
+
+| Model ID | Size |
+| --- | --- |
+| `v0-1.5-lg` | Large |
+| `v0-1.5-md` | Medium |
+| `v0-1.0-md` | Legacy medium |
+
+Vercel's current [v0 Platform API documentation](https://v0.dev/docs/api)
+focuses on projects and chats and does not publish a model-list endpoint. The
+IDs above come from Vercel's official
+[composite model announcement](https://vercel.com/blog/v0-composite-model-family);
+check account availability before depending on the legacy model endpoint. For
+Vercel's current multi-provider catalog, use
+[`AIGatewayModel`](/docs/providers/ai-gateway) instead.

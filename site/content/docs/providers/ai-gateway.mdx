@@ -1,0 +1,29 @@
+---
+title: AI Gateway
+description: Route models through Vercel AI Gateway with a dedicated Swift type.
+---
+
+`AIGatewayModel` reads `AI_GATEWAY_API_KEY` and targets
+`https://ai-gateway.vercel.sh/v1`.
+
+```swift
+let model = AIGatewayModel("anthropic/claude-sonnet-5")
+let result = try await generateText(model: model, prompt: "Say hello.")
+print(result.text)
+```
+
+Use provider-qualified model IDs accepted by the gateway. Capabilities such
+as tools, structured output, vision, and reasoning depend on the routed model.
+
+## Models
+
+The gateway catalog changes continuously. Current examples include:
+
+| Model ID | Provider |
+| --- | --- |
+| `openai/gpt-5.6-sol` | OpenAI |
+| `anthropic/claude-sonnet-5` | Anthropic |
+| `xai/grok-4.5` | xAI |
+
+Fetch the live catalog from [`GET /v1/models`](https://ai-gateway.vercel.sh/v1/models)
+or browse Vercel's [models and providers documentation](https://vercel.com/docs/ai-gateway/models-and-providers).

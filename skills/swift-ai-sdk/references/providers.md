@@ -126,9 +126,34 @@ Env `COHERE_API_KEY`, base `https://api.cohere.com/v2`. Companion `CohereEmbeddi
 let m = CohereModel("command-a")
 ```
 
-## OpenAI-compatible endpoints — `OpenAICompatibleProvider`
+## First-class models on compatible endpoints
 
-Provider object for any chat-completions endpoint. `callAsFunction(_:)` == `languageModel(_:)` → `OpenAIChatModel`; also `textEmbeddingModel(_:)`. General init:
+Named services have dedicated `LanguageModel` types even when they share the chat-completions wire:
+
+| Model | Endpoint | Key from |
+| --- | --- | --- |
+| `TogetherAIModel` | `api.together.xyz/v1` | `TOGETHER_API_KEY` |
+| `FireworksModel` | `api.fireworks.ai/inference/v1` | `FIREWORKS_API_KEY` |
+| `CerebrasModel` | `api.cerebras.ai/v1` | `CEREBRAS_API_KEY` |
+| `OpenRouterModel` | `openrouter.ai/api/v1` | `OPENROUTER_API_KEY` |
+| `DeepInfraModel` | `api.deepinfra.com/v1/openai` | `DEEPINFRA_API_KEY` |
+| `BasetenModel` | `inference.baseten.co/v1` | `BASETEN_API_KEY` |
+| `VercelModel` | `api.v0.dev/v1` | `V0_API_KEY` |
+| `AIGatewayModel` | `ai-gateway.vercel.sh/v1` | `AI_GATEWAY_API_KEY` |
+| `SarvamModel` | `api.sarvam.ai/v1` | `SARVAM_API_KEY` |
+| `OllamaModel` | `localhost:11434/v1` | no key |
+| `LMStudioModel` | `localhost:1234/v1` | no key |
+
+Each initializer is `init(_ modelID:apiKey:baseURL:headers:urlSession:)`; `baseURL: nil` selects the provider default.
+
+```swift
+let hosted = TogetherAIModel("MiniMaxAI/MiniMax-M3")
+let local = OllamaModel("gemma4")
+```
+
+## Custom compatible endpoints — `OpenAICompatibleProvider`
+
+Provider object for a custom chat-completions endpoint. `callAsFunction(_:)` == `languageModel(_:)` → `OpenAIChatModel`; also `textEmbeddingModel(_:)`. General init:
 
 ```swift
 let p = OpenAICompatibleProvider(
@@ -137,37 +162,16 @@ let p = OpenAICompatibleProvider(
   apiKey: "sk-...",
   headers: [:], queryParams: [:]
 )
-let m = p("some-model")
+let m = p("openai/gpt-oss-20b")
 ```
 
-Preconfigured factories (`static func …(apiKey: String? = nil)`), each with the AI SDK base URL + env var:
-
-| Factory | Endpoint | Key from |
-| --- | --- | --- |
-| `.togetherAI()` | `api.together.xyz/v1` | `TOGETHER_API_KEY` |
-| `.fireworks()` | `api.fireworks.ai/inference/v1` | `FIREWORKS_API_KEY` |
-| `.cerebras()` | `api.cerebras.ai/v1` | `CEREBRAS_API_KEY` |
-| `.openRouter()` | `openrouter.ai/api/v1` | `OPENROUTER_API_KEY` |
-| `.deepInfra()` | `api.deepinfra.com/v1/openai` | `DEEPINFRA_API_KEY` |
-| `.baseten()` | `inference.baseten.co/v1` | `BASETEN_API_KEY` |
-| `.vercel()` | `api.v0.dev/v1` | `VERCEL_API_KEY` |
-| `.gateway()` | `ai-gateway.vercel.sh/v1` | `AI_GATEWAY_API_KEY` |
-| `.sarvam()` | `api.sarvam.ai/v1` | `SARVAM_API_KEY` |
-| `.ollama(baseURL:)` | `localhost:11434/v1` | no key |
-| `.lmStudio(baseURL:)` | `localhost:1234/v1` | no key |
-
-```swift
-let together = OpenAICompatibleProvider.togetherAI()
-let m = together("meta-llama/Llama-3.3-70B-Instruct-Turbo")
-```
-
-`.ollama` / `.lmStudio` take `baseURL:` (not `apiKey:`) and send no key.
+The old named factory methods remain deprecated for source compatibility. New code should use the first-class model types.
 
 ## Sarvam trio (Indic)
 
 One key `SARVAM_API_KEY` across all three surfaces.
 
-- Chat: `OpenAICompatibleProvider.sarvam()` → `sarvam("sarvam-105b")`. `sarvam-30b` (64K) / `sarvam-105b` (128K) are reasoning models; `reasoning` → `reasoning_effort`, thinking streams back as `.reasoningDelta`.
+- Chat: `SarvamModel("sarvam-105b")`. `sarvam-30b` (64K) / `sarvam-105b` (128K) are reasoning models; `reasoning` → `reasoning_effort`, thinking streams back as `.reasoningDelta`.
 - TTS: `SarvamSpeechModel(_ modelID: String = "bulbul:v3", apiKey:targetLanguage: String = "en-IN", baseURL:headers:urlSession:)`, base `https://api.sarvam.ai`. Language override + Sarvam knobs (`pitch`, `loudness`, `temperature`, `speech_sample_rate`) via `providerOptions`.
 - STT: `SarvamTranscriptionModel(_ modelID: String = "saaras:v3", apiKey:baseURL:headers:urlSession:)`. `language_code`/`mode` via `providerOptions`; `mode` ∈ `transcribe|translate|verbatim|translit|codemix`.
 
@@ -204,7 +208,7 @@ Lookups: `languageModel`, `embeddingModel`, `imageModel`, `speechModel`, `transc
 - `apiKey: nil` resolves to the env var and defaults to `""` (empty), not a crash — a missing key surfaces later as `AIError.http(status: 401, ...)`.
 - `OpenAIModel` and `XaiModel` default to the **Responses** API; call `.chat(...)` for Chat Completions. `Groq/DeepSeek/Mistral/Perplexity` are always Chat Completions.
 - `baseURL` type differs: `URL?` on `OpenAIModel`/`GoogleVertexModel`/`BedrockModel`/`AzureOpenAIProvider` (nil → default), non-optional `URL` with a default on the others.
-- `AzureOpenAIProvider` and `OpenAICompatibleProvider` are provider objects, not models — call them (`provider("id")`) to get an `OpenAIChatModel`.
+- `AzureOpenAIProvider` and custom `OpenAICompatibleProvider` values are provider objects, not models — call them (`provider("id")`) to get an `OpenAIChatModel`.
 - Vertex `provider` is `"google.vertex"`; if you register it under `"google"` in a `ProviderRegistry`, the `provider:model` prefix and the pack's `provider` string will differ.
 - Perplexity: no tool calling upstream; passing `tools:` won't produce tool calls.
 - Embeddings only on OpenAI, Azure OpenAI, Cohere, and any OpenAI-compatible endpoint (`textEmbeddingModel`). Reranking only on Cohere.

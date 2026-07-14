@@ -1,0 +1,31 @@
+---
+title: Rev.ai
+description: Asynchronous Rev.ai transcription behind one await.
+---
+
+`RevAITranscriptionModel` conforms to `TranscriptionModel` and works with
+[`transcribe`](/docs/transcription).
+
+```swift
+let result = try await transcribe(
+  model: RevAITranscriptionModel(), // machine
+  audio: audioData,
+  mediaType: "audio/mpeg"
+)
+```
+
+The model reads `REVAI_API_KEY`, defaults to the `machine` transcriber, and
+uses `https://api.rev.ai`. It submits the multipart job, polls it, then fetches
+the completed transcript. Word timing is exposed through `result.segments`.
+
+Use `pollInterval` and `pollTimeout` on the model initializer to tune polling.
+
+## Models
+
+| Transcriber ID | Use |
+| --- | --- |
+| `machine` | Recommended general transcription and SDK default |
+| `low_cost` | Reverb Turbo low-cost transcription |
+
+`machine_v2` is deprecated and routes to `machine`. Check Rev.ai's
+[changelog](https://docs.rev.ai/changelog) for transcriber availability.

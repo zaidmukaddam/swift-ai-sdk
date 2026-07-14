@@ -19,7 +19,7 @@ model and nothing else in your code moves.
 
 ```swift
 // Package.swift
-.package(url: "https://github.com/zaidmukaddam/swift-ai-sdk.git", from: "0.1.0")
+.package(url: "https://github.com/zaidmukaddam/swift-ai-sdk.git", from: "0.1.1")
 ```
 
 Add `"AI"` to your target's dependencies (and `"AITesting"` to test targets). Requires

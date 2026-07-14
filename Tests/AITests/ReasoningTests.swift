@@ -140,6 +140,21 @@ final class ReasoningTests: XCTestCase {
         )
     }
 
+    func testOpenRouterSendsNestedReasoningObject() {
+        XCTAssertEqual(
+            chatBody(.xhigh, style: .openRouter)["reasoning"]?["effort"]?.stringValue, "high"
+        )
+        XCTAssertEqual(
+            chatBody(.minimal, style: .openRouter)["reasoning"]?["effort"]?.stringValue, "low"
+        )
+        XCTAssertEqual(
+            chatBody(.medium, style: .openRouter)["reasoning"]?["effort"]?.stringValue, "medium"
+        )
+        XCTAssertNil(chatBody(.none, style: .openRouter)["reasoning"])
+        // Never a top-level reasoning_effort string — OpenRouter doesn't read that field.
+        XCTAssertNil(chatBody(.xhigh, style: .openRouter)["reasoning_effort"])
+    }
+
     func testPerplexityIgnoresReasoning() {
         XCTAssertNil(chatBody(.high, style: .unsupported)["reasoning_effort"])
     }
@@ -159,6 +174,7 @@ final class ReasoningTests: XCTestCase {
         XCTAssertEqual(OpenAIChatModel.ReasoningWireStyle.forProvider("mistral"), .mistral)
         XCTAssertEqual(OpenAIChatModel.ReasoningWireStyle.forProvider("perplexity"), .unsupported)
         XCTAssertEqual(OpenAIChatModel.ReasoningWireStyle.forProvider("fireworks"), .fireworks)
+        XCTAssertEqual(OpenAIChatModel.ReasoningWireStyle.forProvider("openrouter"), .openRouter)
         XCTAssertEqual(OpenAIChatModel.ReasoningWireStyle.forProvider("togetherai"), .compatible)
     }
 

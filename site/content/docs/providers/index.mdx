@@ -1,6 +1,6 @@
 ---
 title: Providers
-description: Native packs, compatible factories, the registry, and reasoning translation.
+description: First-class model packs, custom compatible endpoints, the registry, and reasoning translation.
 icon: Cable
 ---
 
@@ -43,22 +43,41 @@ Keys come from each provider's conventional environment variable
 `apiKey:` argument. `baseURL` includes the version path, matching the AI
 SDK's URL semantics, so gateways and proxies drop in cleanly.
 
-## OpenAI-compatible factories
+## First-class compatible providers
 
-Providers that upstream serves through `@ai-sdk/openai-compatible` come as
-preconfigured factories with the right URLs and env keys:
+Providers that share the OpenAI chat-completions wire still have their own
+model types with the right URLs and environment keys:
 
 ```swift
-let together = OpenAICompatibleProvider.togetherAI()("meta-llama/Llama-3.3-70B")
-let local = OpenAICompatibleProvider.ollama()("llama3.3")
+let together = TogetherAIModel("MiniMaxAI/MiniMax-M3")
+let local = OllamaModel("gemma4")
 ```
 
 Together, Fireworks, Cerebras, OpenRouter, DeepInfra, Baseten, Vercel
 (v0), Gateway, Ollama, LM Studio, and [Sarvam](/docs/providers/sarvam)
-(Indic chat), plus a general initializer for anything else that speaks
-the chat-completions wire. The
+(Indic chat) are first-class model packs. `OpenAICompatibleProvider` is the
+general initializer for custom gateways and anything else that speaks the
+chat-completions wire. The
 [compatibility page](/docs/providers/compatibility) has every endpoint and
 environment variable.
+
+## Media and retrieval models
+
+Non-chat capabilities have their own focused protocols and first-class model
+types. They do not need to be wrapped as language providers:
+
+| Capability | Protocol | Providers |
+| --- | --- | --- |
+| [Embeddings](/docs/embeddings) | `EmbeddingModel` | OpenAI, Cohere, compatible endpoints |
+| [Reranking](/docs/reranking) | `RerankingModel` | Cohere |
+| [Images](/docs/image-generation) | `ImageModel` | OpenAI, fal, Luma, Replicate |
+| [Speech](/docs/speech-generation) | `SpeechModel` | OpenAI, ElevenLabs, LMNT, Hume, Deepgram, Sarvam |
+| [Transcription](/docs/transcription) | `TranscriptionModel` | OpenAI, ElevenLabs, Deepgram, AssemblyAI, Rev.ai, Gladia, Sarvam |
+| [Video](/docs/video-generation) | `VideoModel` | xAI, Luma |
+| [Realtime](/docs/realtime) | `RealtimeModel` | OpenAI, Google, xAI |
+
+The [media provider index](/docs/providers/media) links every dedicated
+provider page.
 
 ## The registry and custom providers
 
@@ -130,7 +149,27 @@ cross-provider view.
   <Card title="Mistral" href="/docs/providers/mistral" description="Chat wire plus a binary reasoning knob." />
   <Card title="Perplexity" href="/docs/providers/perplexity" description="Search-grounded answers with citations." />
   <Card title="Cohere" href="/docs/providers/cohere" description="Command models, embeddings, reranking." />
+  <Card title="Together AI" href="/docs/providers/together-ai" description="Hosted open models through a dedicated pack." />
+  <Card title="Fireworks" href="/docs/providers/fireworks" description="Fast inference with reasoning support." />
+  <Card title="Cerebras" href="/docs/providers/cerebras" description="Dedicated Cerebras inference pack." />
+  <Card title="OpenRouter" href="/docs/providers/openrouter" description="One model type for OpenRouter's catalog." />
+  <Card title="DeepInfra" href="/docs/providers/deepinfra" description="Chat completions at DeepInfra's OpenAI endpoint." />
+  <Card title="Baseten" href="/docs/providers/baseten" description="Call hosted model deployments." />
+  <Card title="Vercel" href="/docs/providers/vercel" description="Generate through the v0 endpoint." />
+  <Card title="AI Gateway" href="/docs/providers/ai-gateway" description="Route provider-qualified models through AI Gateway." />
   <Card title="Sarvam" href="/docs/providers/sarvam" description="Indic chat, speech, and transcription." />
-  <Card title="OpenAI-compatible" href="/docs/providers/openai-compatible" description="Together, Fireworks, Ollama, and friends." />
-  <Card title="Media providers" href="/docs/providers/media" description="Image, speech, transcription, and video packs." />
+  <Card title="fal" href="/docs/providers/fal" description="Image generation across fal-hosted models." />
+  <Card title="Luma" href="/docs/providers/luma" description="Dream Machine image and video generation." />
+  <Card title="Replicate" href="/docs/providers/replicate" description="Image generation with Replicate-hosted models." />
+  <Card title="ElevenLabs" href="/docs/providers/elevenlabs" description="Speech synthesis and transcription." />
+  <Card title="LMNT" href="/docs/providers/lmnt" description="Text-to-speech with LMNT voices." />
+  <Card title="Hume" href="/docs/providers/hume" description="Expressive text-to-speech." />
+  <Card title="Deepgram" href="/docs/providers/deepgram" description="Aura speech and Nova transcription." />
+  <Card title="AssemblyAI" href="/docs/providers/assemblyai" description="Asynchronous transcription behind one await." />
+  <Card title="Rev.ai" href="/docs/providers/rev-ai" description="Asynchronous speech-to-text jobs." />
+  <Card title="Gladia" href="/docs/providers/gladia" description="Prerecorded-audio transcription." />
+  <Card title="Ollama" href="/docs/providers/ollama" description="Run local Ollama models." />
+  <Card title="LM Studio" href="/docs/providers/lm-studio" description="Connect to LM Studio's local server." />
+  <Card title="Custom compatible" href="/docs/providers/openai-compatible" description="Configure a custom chat-completions endpoint." />
+  <Card title="Media provider index" href="/docs/providers/media" description="Compare every image, speech, transcription, and video pack." />
 </Cards>

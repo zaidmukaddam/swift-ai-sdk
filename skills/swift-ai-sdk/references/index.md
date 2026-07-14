@@ -8,7 +8,7 @@ Pick the file that matches the task. Open one or two, not all.
 | [structured-output.md](structured-output.md) | `generateObject`, `streamObject` (+ `elementStream`), `generateEnum`, `generateJSON`, and the `Schema` DSL |
 | [tools.md](tools.md) | Function `Tool`, typed arguments, execution context, human-in-the-loop approvals, client-side tools, and provider-executed tools (`<Model>.Tools`) |
 | [agents.md](agents.md) | `Agent` (the ToolLoopAgent analog), loop control (`stopWhen`/`stepCountIs`/`hasToolCall`), `prepareCall`, `prepareStep`, `toolOrder`, subagents via `asTool` |
-| [providers.md](providers.md) | The capability matrix, how to construct each provider, keys/base URLs, `OpenAICompatibleProvider` factories, Sarvam, `ProviderRegistry`, and `customProvider` |
+| [providers.md](providers.md) | The capability matrix, first-class provider models, custom compatible endpoints, keys/base URLs, `ProviderRegistry`, and `customProvider` |
 | [reasoning.md](reasoning.md) | `ReasoningEffort` and how it maps to each provider's native reasoning controls; consuming `.reasoningDelta` |
 | [middleware.md](middleware.md) | `wrapLanguageModel` with `cache`, `extractReasoning`, `simulateStreaming`, `defaultSettings`, and custom `wrapCall`/`transformRequest`/`wrapStream` hooks |
 | [chat-ui.md](chat-ui.md) | `ChatSession`, `CompletionSession`, `ObjectSession` for SwiftUI; `ChatTransport`/`HTTPChatTransport`/`LocalChatTransport`; the UI-message stream protocol and `/api/chat` compatibility |

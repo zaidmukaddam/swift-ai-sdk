@@ -468,7 +468,7 @@ public struct OpenAIModel: LanguageModel {
 
 public extension OpenAIModel {
     enum Tools {
-        static func webSearch(
+        public static func webSearch(
             allowedDomains: [String]? = nil,
             externalWebAccess: Bool? = nil,
             searchContextSize: String? = nil,
@@ -487,7 +487,7 @@ public extension OpenAIModel {
             )
         }
 
-        static func webSearchPreview(
+        public static func webSearchPreview(
             searchContextSize: String? = nil,
             userLocation: JSONValue? = nil,
             name: String = "web_search_preview"
@@ -500,7 +500,7 @@ public extension OpenAIModel {
             )
         }
 
-        static func fileSearch(
+        public static func fileSearch(
             vectorStoreIds: [String],
             maxNumResults: Int? = nil,
             filters: JSONValue? = nil,
@@ -517,7 +517,7 @@ public extension OpenAIModel {
             )
         }
 
-        static func codeInterpreter(
+        public static func codeInterpreter(
             fileIds: [String]? = nil,
             name: String = "code_interpreter"
         ) -> ProviderDefinedTool {

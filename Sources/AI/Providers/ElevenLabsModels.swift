@@ -35,11 +35,15 @@ public struct ElevenLabsSpeechModel: SpeechModel {
     }
 
     func buildURLRequest(_ request: SpeechModelRequest) throws -> URLRequest {
-        let voice = request.voice ?? "21m00Tcm4TlvDq8ikWAM"
-        var components = URLComponents(
-            url: baseURL.appendingPathComponent("v1/text-to-speech/\(voice)"),
-            resolvingAgainstBaseURL: false
-        )!
+        let requestedVoice = request.voice ?? ""
+        let voice = requestedVoice.isEmpty ? "21m00Tcm4TlvDq8ikWAM" : requestedVoice
+        // Percent-encode "/" too, so a voice id can't add or escape a path segment.
+        guard let encodedVoice = voice.addingPercentEncoding(
+            withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))
+        ), var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+            throw AIError.invalidRequest("Invalid ElevenLabs voice id: \(voice)")
+        }
+        components.percentEncodedPath += "/v1/text-to-speech/\(encodedVoice)"
         if let outputFormat = request.outputFormat {
             components.queryItems = [URLQueryItem(
                 name: "output_format", value: Self.qualifiedFormat(outputFormat)
@@ -57,7 +61,10 @@ public struct ElevenLabsSpeechModel: SpeechModel {
             for (key, value) in options { body[key] = value }
         }
 
-        var urlRequest = URLRequest(url: components.url!)
+        guard let url = components.url else {
+            throw AIError.invalidRequest("Could not build ElevenLabs speech URL for voice \(voice)")
+        }
+        var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = "POST"
         urlRequest.setValue(apiKey, forHTTPHeaderField: "xi-api-key")
         urlRequest.setValue("application/json", forHTTPHeaderField: "content-type")
@@ -98,7 +105,7 @@ public struct ElevenLabsTranscriptionModel: TranscriptionModel {
     private let urlSession: URLSession
 
     public init(
-        _ modelID: String = "scribe_v1",
+        _ modelID: String = "scribe_v2",
         apiKey: String? = nil,
         baseURL: URL = URL(string: "https://api.elevenlabs.io")!,
         headers: [String: String] = [:],

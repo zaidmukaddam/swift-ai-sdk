@@ -17,6 +17,10 @@ Key from `COHERE_API_KEY`; base URL `https://api.cohere.com/v2`.
 
 ## Embeddings and reranking
 
+Both are independent model protocols: `CohereEmbeddingModel` works with
+[`embed` and `embedMany`](/docs/embeddings), while `CohereRerankingModel`
+works with [`rerank`](/docs/reranking).
+
 ```swift
 let embeddings = try await embedMany(
   model: CohereEmbeddingModel("embed-v4.0"),

@@ -1,50 +1,26 @@
 ---
-title: OpenAI-compatible
-description: Together, Fireworks, Ollama, and any other endpoint that speaks chat completions.
+title: Custom OpenAI-compatible endpoints
+description: Connect custom gateways, proxies, and model servers that speak chat completions.
 ---
 
-Anything serving the chat-completions wire works through
-`OpenAICompatibleProvider` — hosted platforms and the model running on
-your Mac alike:
+Use `OpenAICompatibleProvider` for an endpoint without a dedicated pack—a
+company gateway, a vLLM server, or a proxy:
 
 ```swift
-let together = OpenAICompatibleProvider.togetherAI()("meta-llama/Llama-3.3-70B-Instruct-Turbo")
-let local    = OpenAICompatibleProvider.ollama()("llama3.3")
-
-// Anything else that speaks the chat-completions wire — a company
-// gateway, a vLLM box, a proxy:
 let custom = OpenAICompatibleProvider(
   name: "my-gateway",
   baseURL: URL(string: "https://llm.your-company.com/v1")!,
   apiKey: secret
 )
-let model = custom("your-model-id")
+let model = custom("openai/gpt-oss-20b")
 ```
 
-## Presets
+## Model selection
 
-Base URLs and environment variables are pinned to the matching
-`@ai-sdk/*` packages:
-
-| Factory | Endpoint | Key from |
-| --- | --- | --- |
-| `.togetherAI()` | `api.together.xyz/v1` | `TOGETHER_API_KEY` |
-| `.fireworks()` | `api.fireworks.ai/inference/v1` | `FIREWORKS_API_KEY` |
-| `.cerebras()` | `api.cerebras.ai/v1` | `CEREBRAS_API_KEY` |
-| `.openRouter()` | `openrouter.ai/api/v1` | `OPENROUTER_API_KEY` |
-| `.deepInfra()` | `api.deepinfra.com/v1/openai` | `DEEPINFRA_API_KEY` |
-| `.baseten()` | `inference.baseten.co/v1` | `BASETEN_API_KEY` |
-| `.vercel()` | `api.v0.dev/v1` | `VERCEL_API_KEY` |
-| `.gateway()` | `ai-gateway.vercel.sh/v1` | `AI_GATEWAY_API_KEY` |
-| `.ollama()` | `localhost:11434/v1` | no key |
-| `.lmStudio()` | `localhost:1234/v1` | no key |
-| `.sarvam()` | `api.sarvam.ai/v1` | `SARVAM_API_KEY` |
-
-`.sarvam()` covers Sarvam chat (`sarvam-30b` / `sarvam-105b`); its speech
-and transcription models live on the [Sarvam page](/docs/providers/sarvam).
-
-Hugging Face and Replicate aren't included — neither fits the
-chat-completions wire.
+There is no universal model list for a custom endpoint. The concrete
+`openai/gpt-oss-20b` ID above is only an example; pass an ID returned by your
+server's OpenAI-compatible `GET /v1/models` endpoint. If the service has a
+dedicated provider page, use its first-class model type and catalog instead.
 
 ## Features
 
@@ -53,18 +29,15 @@ them; whether a given model honors them is between you and the model.
 Embeddings work against the same endpoints:
 
 ```swift
-let embeddings = OpenAICompatibleProvider.togetherAI()
-  .textEmbeddingModel("BAAI/bge-large-en-v1.5")
+let embeddings = custom.textEmbeddingModel("BAAI/bge-large-en-v1.5")
 ```
 
-The `reasoning` parameter passes through as `reasoning_effort` on every
-compatible endpoint (Fireworks coerces it to its three levels); models
-that emit inline `<think>` blocks instead pair with the
+The `reasoning` parameter passes through as `reasoning_effort`. Models that
+emit inline `<think>` blocks instead pair with the
 [extractReasoning middleware](/docs/advanced#middleware).
 
-## Local models
+## Named providers
 
-`.ollama()` and `.lmStudio()` default to their local ports and need no
-key. On iOS, remember `NSAllowsLocalNetworking` so the simulator can
-reach your Mac's loopback — the
-[offline-first guide](/docs/guides/offline-first) walks through it.
+Named services use their own model types and documentation pages. The old
+`OpenAICompatibleProvider.togetherAI()`, `.fireworks()`, and similar factory
+methods remain deprecated for source compatibility.

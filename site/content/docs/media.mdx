@@ -1,112 +1,30 @@
 ---
-title: Images, speech, and video
-description: generateImage, generateSpeech, transcribe, and generateVideo.
+title: Media overview
+description: Image generation, speech synthesis, transcription, and video generation.
 icon: Image
 ---
 
-## Images
+Swift AI exposes a small protocol and one top-level function for each media
+capability. Pick the capability you need; provider-specific model types plug
+into the same call.
+
+<Cards>
+  <Card title="Image generation" href="/docs/image-generation" description="Generate and edit images with OpenAI, fal, Luma, or Replicate." />
+  <Card title="Speech generation" href="/docs/speech-generation" description="Synthesize audio with OpenAI, ElevenLabs, LMNT, Hume, Deepgram, or Sarvam." />
+  <Card title="Transcription" href="/docs/transcription" description="Transcribe audio with seven built-in provider models." />
+  <Card title="Video generation" href="/docs/video-generation" description="Create video with xAI or Luma, including image-to-video." />
+</Cards>
+
+All four functions are `async throws`, retry transient failures by default,
+and accept `providerOptions` for native settings that do not belong in the
+shared API.
 
 ```swift
-let result = try await generateImage(
-  model: OpenAIImageModel("gpt-image-2"),
-  prompt: "A watercolor fox in a snowy forest",
-  size: "1024x1024"
-)
-try result.image.write(to: outputURL)
+let image = try await generateImage(model: imageModel, prompt: prompt)
+let audio = try await generateSpeech(model: speechModel, text: text)
+let text = try await transcribe(model: transcriptionModel, audio: data, mediaType: "audio/mpeg")
+let video = try await generateVideo(model: videoModel, prompt: prompt)
 ```
 
-Edits take source images through the same call:
-
-```swift
-let edited = try await generateImage(
-  model: OpenAIImageModel("gpt-image-2"),
-  prompt: "Make the sky stormy",
-  images: [sourceImage]
-)
-```
-
-fal, Luma, and Replicate image models plug into the same function:
-
-```swift
-let flux = try await generateImage(
-  model: FalImageModel("fal-ai/flux/schnell"),
-  prompt: prompt
-)
-```
-
-The full set of knobs: `n` (image count), `size` (`"1024x1024"`) or
-`aspectRatio` (`"16:9"`) depending on what the provider takes, `seed`
-for reproducibility, and `providerOptions` keyed by provider for
-anything native (`["openai": ["quality": "hd", "style": "vivid"]]`).
-The result carries every image in `result.images` plus
-`revisedPrompts` — some providers rewrite your prompt and tell you.
-
-## Speech
-
-```swift
-let speech = try await generateSpeech(
-  model: OpenAISpeechModel("gpt-4o-mini-tts"),
-  text: "The quick brown fox jumped over the lazy dog.",
-  voice: "alloy"
-)
-try speech.audio.write(to: URL(fileURLWithPath: "/tmp/hello.mp3"))
-```
-
-ElevenLabs, LMNT, Hume, and Deepgram ship as speech packs with the same
-call and their own voice catalogs.
-
-Beyond `voice`, requests take `instructions` ("speak in a slow, steady
-tone"), `speed` (a multiplier; OpenAI accepts 0.25 to 4),
-`outputFormat` (`"mp3"`, `"wav"`), and per-provider `providerOptions`.
-
-## Transcription
-
-```swift
-let transcript = try await transcribe(
-  model: OpenAITranscriptionModel("whisper-1"),
-  audio: audioData,
-  mediaType: "audio/mpeg"
-)
-print(transcript.text)
-for segment in transcript.segments {
-  print("\(segment.startSecond)s to \(segment.endSecond)s:", segment.text)
-}
-```
-
-ElevenLabs, Deepgram, AssemblyAI, Rev.ai, and Gladia are included. The
-async providers submit, poll, and fetch the finished transcript
-internally; you still make one call.
-
-Results report the detected `language` and `durationInSeconds` where
-the provider surfaces them. Native options (a language hint,
-temperature) go through `providerOptions` keyed by provider:
-`["openai": ["language": "en", "temperature": 0]]`.
-
-## Video
-
-Rendering happens asynchronously upstream; the provider polls until the
-clip is ready and hands you the result:
-
-```swift
-let result = try await generateVideo(
-  model: XaiVideoModel("grok-imagine-video-1.5"),
-  prompt: "A paper boat drifting down a rainy street, cinematic",
-  duration: 6
-)
-print(result.urls.first?.absoluteString ?? "no url")
-```
-
-Animate a still by passing it as the first frame; Luma works the same
-way:
-
-```swift
-let result = try await generateVideo(
-  model: XaiVideoModel("grok-imagine-video-1.5"),
-  prompt: "The fox blinks and snow falls gently",
-  image: ImageContent(data: still)
-)
-```
-
-Requests also take `aspectRatio` (`"16:9"`) and `providerOptions`
-merged into the create call. Results arrive as `urls` or inline
-`videos` bytes depending on how the provider delivers.
+See [media providers](/docs/providers/media) for the provider-by-provider
+view.

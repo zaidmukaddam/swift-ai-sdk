@@ -13,7 +13,7 @@ public func wrapLanguageModel(
 
 ```swift
 let model = wrapLanguageModel(
-    model: OpenAICompatibleProvider.ollama()("qwen3"),
+    model: OllamaModel("qwen3"),
     middleware: [
         .cache(),
         .extractReasoning(tag: "think"),

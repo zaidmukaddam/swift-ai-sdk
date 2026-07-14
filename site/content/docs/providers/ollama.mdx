@@ -1,0 +1,32 @@
+---
+title: Ollama
+description: Run local Ollama models with the same generation APIs as cloud providers.
+---
+
+`OllamaModel` defaults to `http://localhost:11434/v1` and needs no key.
+
+```swift
+let model = OllamaModel("gemma4")
+let result = streamText(model: model, prompt: "Say hello.")
+
+for try await text in result.textStream {
+  print(text, terminator: "")
+}
+```
+
+Override `baseURL:` when Ollama runs on another host. Models that emit inline
+`<think>` blocks can use the [reasoning extraction middleware](/docs/reasoning#extracting-reasoning-from-text).
+On iOS, enable `NSAllowsLocalNetworking` so the simulator can reach your Mac.
+
+## Models
+
+Current library examples include `gemma4`, `qwen3-coder-next`,
+`deepseek-v4-flash`, and `kimi-k2.7-code`. The usable IDs are the models
+installed locally; inspect them with `ollama list` or:
+
+```bash
+curl http://localhost:11434/api/tags
+```
+
+Browse the live [Ollama model library](https://ollama.com/library) to find and
+pull additional models.

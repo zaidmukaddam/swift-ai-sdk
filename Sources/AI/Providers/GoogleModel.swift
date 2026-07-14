@@ -341,42 +341,42 @@ public struct GoogleModel: LanguageModel {
 
 public extension GoogleModel {
     enum Tools {
-        static func googleSearch(name: String = "google_search") -> ProviderDefinedTool {
+        public static func googleSearch(name: String = "google_search") -> ProviderDefinedTool {
             ProviderDefinedTool(
                 provider: "google", id: "google.google_search", name: name,
                 args: .object(["googleSearch": .object([:])])
             )
         }
 
-        static func urlContext(name: String = "url_context") -> ProviderDefinedTool {
+        public static func urlContext(name: String = "url_context") -> ProviderDefinedTool {
             ProviderDefinedTool(
                 provider: "google", id: "google.url_context", name: name,
                 args: .object(["urlContext": .object([:])])
             )
         }
 
-        static func codeExecution(name: String = "code_execution") -> ProviderDefinedTool {
+        public static func codeExecution(name: String = "code_execution") -> ProviderDefinedTool {
             ProviderDefinedTool(
                 provider: "google", id: "google.code_execution", name: name,
                 args: .object(["codeExecution": .object([:])])
             )
         }
 
-        static func enterpriseWebSearch(name: String = "enterprise_web_search") -> ProviderDefinedTool {
+        public static func enterpriseWebSearch(name: String = "enterprise_web_search") -> ProviderDefinedTool {
             ProviderDefinedTool(
                 provider: "google", id: "google.enterprise_web_search", name: name,
                 args: .object(["enterpriseWebSearch": .object([:])])
             )
         }
 
-        static func googleMaps(name: String = "google_maps") -> ProviderDefinedTool {
+        public static func googleMaps(name: String = "google_maps") -> ProviderDefinedTool {
             ProviderDefinedTool(
                 provider: "google", id: "google.google_maps", name: name,
                 args: .object(["googleMaps": .object([:])])
             )
         }
 
-        static func fileSearch(
+        public static func fileSearch(
             fileSearchStoreNames: [String]? = nil,
             name: String = "file_search"
         ) -> ProviderDefinedTool {

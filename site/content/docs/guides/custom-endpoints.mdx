@@ -1,0 +1,119 @@
+---
+title: Use custom endpoints and gateways
+description: Connect a company gateway, self-hosted server, or OpenAI-compatible proxy.
+---
+
+Covers `Examples/Features/04-ProviderSwap.swift` and
+`23-WorkflowGuides.swift`. Use this when an endpoint speaks OpenAI Chat
+Completions but does not have a dedicated model type in the SDK.
+
+<Steps>
+<Step>
+### Prefer a first-class provider when one exists
+
+Named provider types carry the correct endpoint and environment variable:
+
+```swift
+let hosted: any LanguageModel = TogetherAIModel("MiniMaxAI/MiniMax-M3")
+let local: any LanguageModel = OllamaModel("gemma4")
+```
+
+Use `OpenAICompatibleProvider` for your own gateway, proxy, vLLM server, or
+another compatible service. Do not wrap a named provider merely because its
+wire format happens to be OpenAI-compatible.
+</Step>
+
+<Step>
+### Configure the gateway once
+
+```swift
+let gateway = OpenAICompatibleProvider(
+  name: "company-gateway",
+  baseURL: URL(string: "https://llm.example.com/v1")!,
+  apiKey: ProcessInfo.processInfo.environment["GATEWAY_API_KEY"],
+  headers: ["x-team": "ios"],
+  queryParams: ["api-version": "2026-01-01"]
+)
+```
+
+The provider name appears in telemetry and result metadata. Headers and query
+parameters are attached to every model request.
+</Step>
+
+<Step>
+### Create language and embedding models
+
+Pass model ids exactly as your server exposes them:
+
+```swift
+let chat = gateway("openai/gpt-oss-20b")
+let embeddings = gateway.textEmbeddingModel("BAAI/bge-large-en-v1.5")
+
+let answer = try await generateText(
+  model: chat,
+  prompt: "Explain Swift actors in three sentences."
+)
+let vector = try await embed(model: embeddings, value: answer.text)
+```
+
+Tools, structured output, vision, and reasoning are encoded on the compatible
+wire. The selected upstream model still decides which features it actually
+supports.
+</Step>
+
+<Step>
+### Select models by string
+
+`ProviderRegistry` is useful when configuration, feature flags, or a server
+response chooses the model:
+
+```swift
+let registry = ProviderRegistry(providers: [
+  "gateway": .init(
+    languageModel: { gateway($0) },
+    embeddingModel: { gateway.textEmbeddingModel($0) }
+  ),
+  "ollama": .init { OllamaModel($0) }
+])
+
+let model = try registry.languageModel("gateway:openai/gpt-oss-20b")
+```
+
+The separator defaults to `:` and can be changed when model ids already use
+that character.
+</Step>
+
+<Step>
+### Keep credentials off untrusted clients
+
+If the endpoint uses a privileged provider key, call it from your backend or
+issue a short-lived, scoped gateway token. Custom headers are convenient for
+routing and tenant context, but they are not a secret store.
+</Step>
+</Steps>
+
+## Final code
+
+```swift title="CompanyGateway.swift"
+import AI
+import Foundation
+
+let companyGateway = OpenAICompatibleProvider(
+  name: "company-gateway",
+  baseURL: URL(string: "https://llm.example.com/v1")!,
+  apiKey: ProcessInfo.processInfo.environment["GATEWAY_API_KEY"],
+  headers: ["x-team": "ios"],
+  queryParams: ["api-version": "2026-01-01"]
+)
+
+func askGateway(_ prompt: String) async throws -> String {
+  try await generateText(
+    model: companyGateway("openai/gpt-oss-20b"),
+    prompt: prompt
+  ).text
+}
+```
+
+See [Custom OpenAI-compatible endpoints](/docs/providers/openai-compatible)
+for the reference API and [Compatibility](/docs/providers/compatibility) for
+the feature matrix.

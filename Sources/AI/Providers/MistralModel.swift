@@ -3,33 +3,24 @@ import Foundation
 import FoundationNetworking
 #endif
 
-public struct MistralModel: LanguageModel {
-    public var provider: String { engine.provider }
-    public var modelID: String { engine.modelID }
+private let mistralConfiguration = OpenAICompatibleServiceConfiguration(
+    providerName: "mistral",
+    baseURL: URL(string: "https://api.mistral.ai/v1")!,
+    apiKeyEnvironmentVariable: "MISTRAL_API_KEY"
+)
 
+public struct MistralModel: OpenAICompatibleLanguageModel {
+    static let configuration = mistralConfiguration
     let engine: OpenAIChatModel
 
     public init(
-        _ modelID: String,
-        apiKey: String? = nil,
-        baseURL: URL = URL(string: "https://api.mistral.ai/v1")!,
-        headers: [String: String] = [:],
+        _ modelID: String, apiKey: String? = nil, baseURL: URL? = nil,
+        headers: [String: String] = [:], queryParams: [String: String] = [:],
         urlSession: URLSession = .shared
     ) {
-        self.engine = OpenAIChatModel(
-            modelID,
-            apiKey: apiKey ?? ProcessInfo.processInfo.environment["MISTRAL_API_KEY"] ?? "",
-            baseURL: baseURL,
-            headers: headers,
-            queryParams: [:],
-            urlSession: urlSession,
-            providerName: "mistral"
+        engine = mistralConfiguration.makeModel(
+            modelID, apiKey: apiKey, baseURL: baseURL, headers: headers,
+            queryParams: queryParams, urlSession: urlSession
         )
-    }
-
-    public func stream(
-        _ request: LanguageModelRequest
-    ) async throws -> AsyncThrowingStream<StreamPart, Error> {
-        try await engine.stream(request)
     }
 }

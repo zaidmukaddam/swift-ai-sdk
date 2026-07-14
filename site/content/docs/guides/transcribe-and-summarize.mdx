@@ -1,0 +1,145 @@
+---
+title: Transcribe and summarize audio
+description: Turn a recording into timestamped text, typed notes, and optional speech.
+---
+
+Covers `Examples/Features/13-SpeechAndTranscription.swift` and
+`23-WorkflowGuides.swift`. You end up with a reusable meeting pipeline that
+accepts an audio file and returns validated Swift data.
+
+<Steps>
+<Step>
+### Load and transcribe the recording
+
+Pass the bytes and the real media type. Asynchronous providers such as
+AssemblyAI, Rev.ai, and Gladia submit and poll internally, so the call site is
+still one `await`.
+
+```swift
+let audio = try Data(contentsOf: recordingURL)
+let transcript = try await transcribe(
+  model: OpenAITranscriptionModel("whisper-1"),
+  audio: audio,
+  mediaType: "audio/mpeg"
+)
+print(transcript.text)
+```
+</Step>
+
+<Step>
+### Use timestamps when available
+
+Providers can return language, duration, and timed segments in addition to
+the full text:
+
+```swift
+for segment in transcript.segments {
+  print("\(segment.startSecond)s–\(segment.endSecond)s", segment.text)
+}
+```
+
+Some providers return only the complete transcript. Treat `segments` as an
+optional enhancement rather than requiring it for the rest of the pipeline.
+</Step>
+
+<Step>
+### Define typed notes
+
+Use structured output so downstream UI does not parse prose.
+
+```swift
+struct MeetingNotes: Codable, Sendable {
+  let title: String
+  let summary: String
+  let actionItems: [String]
+}
+
+let notesSchema: JSONValue = [
+  "type": "object",
+  "properties": [
+    "title": ["type": "string"],
+    "summary": ["type": "string"],
+    "actionItems": ["type": "array", "items": ["type": "string"]]
+  ],
+  "required": ["title", "summary", "actionItems"],
+  "additionalProperties": false
+]
+```
+</Step>
+
+<Step>
+### Summarize the transcript
+
+```swift
+let notes = try await generateObject(
+  model: OpenAIModel("gpt-5.6-sol"),
+  of: MeetingNotes.self,
+  schema: notesSchema,
+  schemaName: "meeting_notes",
+  prompt: "Summarize this transcript and extract action items:\n\n\(transcript.text)"
+).object
+```
+
+Long recordings should be summarized in chunks and then reduced into one
+final summary instead of placing an unbounded transcript in one request.
+</Step>
+
+<Step>
+### Read the summary aloud
+
+Speech generation is optional and uses the same provider-independent shape:
+
+```swift
+let speech = try await generateSpeech(
+  model: OpenAISpeechModel("gpt-4o-mini-tts"),
+  text: notes.summary,
+  voice: "alloy",
+  outputFormat: "mp3"
+)
+try speech.audio.write(to: summaryAudioURL)
+```
+</Step>
+</Steps>
+
+## Final code
+
+```swift title="MeetingNotes.swift"
+import AI
+import Foundation
+
+struct MeetingNotes: Codable, Sendable {
+  let title: String
+  let summary: String
+  let actionItems: [String]
+}
+
+let notesSchema: JSONValue = [
+  "type": "object",
+  "properties": [
+    "title": ["type": "string"],
+    "summary": ["type": "string"],
+    "actionItems": ["type": "array", "items": ["type": "string"]]
+  ],
+  "required": ["title", "summary", "actionItems"],
+  "additionalProperties": false
+]
+
+func makeMeetingNotes(from recordingURL: URL) async throws -> MeetingNotes {
+  let transcript = try await transcribe(
+    model: OpenAITranscriptionModel("whisper-1"),
+    audio: Data(contentsOf: recordingURL),
+    mediaType: "audio/mpeg"
+  )
+
+  return try await generateObject(
+    model: OpenAIModel("gpt-5.6-sol"),
+    of: MeetingNotes.self,
+    schema: notesSchema,
+    schemaName: "meeting_notes",
+    prompt: "Summarize this transcript and extract action items:\n\n\(transcript.text)"
+  ).object
+}
+```
+
+See [Transcription](/docs/transcription) and
+[Speech generation](/docs/speech-generation) for provider and model choices.

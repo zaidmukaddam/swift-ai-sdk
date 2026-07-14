@@ -3,9 +3,18 @@ title: Media and embeddings
 description: Images, speech, transcription, video, search, and reranking.
 ---
 
-Covers `Examples/08-Embeddings.swift`, `12-ImageGeneration.swift`,
+Covers `Examples/Features/08-Embeddings.swift`, `12-ImageGeneration.swift`,
 `13-SpeechAndTranscription.swift`, `14-VideoGeneration.swift`, and
-`15-Rerank.swift`. Quick hits, one call each.
+`15-Rerank.swift`. Quick hits, one call each. For API-level detail, see
+[embeddings](/docs/embeddings), [reranking](/docs/reranking),
+[image generation](/docs/image-generation),
+[speech generation](/docs/speech-generation),
+[transcription](/docs/transcription), and
+[video generation](/docs/video-generation).
+
+For complete workflows, continue with [semantic search](/docs/guides/semantic-search),
+[transcribe and summarize](/docs/guides/transcribe-and-summarize), or
+[generate images and video](/docs/guides/image-and-video-pipeline).
 
 <Steps>
 <Step>
@@ -13,7 +22,7 @@ Covers `Examples/08-Embeddings.swift`, `12-ImageGeneration.swift`,
 
 ```swift
 let result = try await generateImage(
-  model: OpenAIImageModel("gpt-image-1"),
+  model: OpenAIImageModel("gpt-image-2"),
   prompt: "A watercolor fox in a snowy forest",
   size: "1024x1024"
 )
@@ -47,7 +56,7 @@ print(transcript.text)
 ```swift
 let still = try Data(contentsOf: URL(fileURLWithPath: "/tmp/fox.png"))
 let video = try await generateVideo(
-  model: XaiVideoModel("grok-video-1"),
+  model: XaiVideoModel("grok-imagine-video-1.5"),
   prompt: "The fox blinks and snow falls gently",
   image: ImageContent(data: still)
 )
@@ -103,7 +112,7 @@ import Foundation
 func foxPipeline() async throws {
   // 1. A picture
   let image = try await generateImage(
-    model: OpenAIImageModel("gpt-image-1"),
+    model: OpenAIImageModel("gpt-image-2"),
     prompt: "A watercolor fox in a snowy forest",
     size: "1024x1024"
   )
@@ -120,7 +129,7 @@ func foxPipeline() async throws {
 
   // 3. A film
   let video = try await generateVideo(
-    model: XaiVideoModel("grok-video-1"),
+    model: XaiVideoModel("grok-imagine-video-1.5"),
     prompt: "The fox blinks and snow falls gently",
     image: ImageContent(data: try Data(contentsOf: stillURL))
   )

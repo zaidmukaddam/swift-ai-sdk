@@ -102,14 +102,20 @@ DeepSeekModel("deepseek-reasoner")         // DEEPSEEK_API_KEY, streams reasonin
 MistralModel("mistral-large-latest")       // MISTRAL_API_KEY
 PerplexityModel("sonar")                   // PERPLEXITY_API_KEY, citations in result.sources
 FoundationModelsModel()                    // Apple on-device; .privateCloudCompute() for PCC
+SarvamModel("sarvam-105b")                 // SARVAM_API_KEY
+OpenRouterModel("anthropic/claude-sonnet-5") // OPENROUTER_API_KEY
+OllamaModel("gemma4")                      // local, no key needed
 ```
 
 Each pack pins the service's real base URL, reads the same environment variable the AI SDK uses, and decodes that provider's quirks: xAI speaks the Responses API by default (`XaiModel.chat(...)` for the legacy path) with url-citation sources; Groq and DeepSeek stream thinking into `reasoningText`; Perplexity's consulted URLs land in `result.sources`. Provider-specific knobs (`search_parameters`, `reasoning_format`, `safe_prompt`, ...) pass through `providerOptions`.
 
-Services whose upstream packages wrap `@ai-sdk/openai-compatible` do the same here via `OpenAICompatibleProvider` factories: Together, Fireworks, Cerebras, OpenRouter, Ollama, LM Studio.
+Providers that share the chat-completions wire still have first-class packs:
+`TogetherAIModel`, `FireworksModel`, `CerebrasModel`, `OpenRouterModel`,
+`DeepInfraModel`, `BasetenModel`, `VercelModel`, `AIGatewayModel`,
+`SarvamModel`, `OllamaModel`, and `LMStudioModel`.
 
 ```swift
-let local = OpenAICompatibleProvider.ollama()("llama3.3")  // no key needed
+let local = OllamaModel("gemma4")
 
 // Custom gateways get the full config surface, like createOpenAICompatible:
 let gateway = OpenAICompatibleProvider(
@@ -129,8 +135,8 @@ let model = OpenAIEmbeddingModel("text-embedding-3-small")  // key from OPENAI_A
 let docs = try await embedMany(model: model, values: texts)
 let score = cosineSimilarity(docs.embeddings[0], docs.embeddings[1])
 
-// Providers vend embedding models too:
-let bge = OpenAICompatibleProvider.togetherAI().textEmbeddingModel("BAAI/bge-large-en-v1.5")
+// A custom compatible endpoint can vend embedding models too:
+let bge = gateway.textEmbeddingModel("BAAI/bge-large-en-v1.5")
 ```
 
 ## What's in the box (v0.1)
@@ -168,7 +174,7 @@ Providers: native packs for OpenAI (Responses API default), Anthropic, xAI
 (Responses default, plus video), Google (Gemini wire), Google Vertex, Amazon
 Bedrock (Converse over AWS event stream), Cohere (chat, embeddings, rerank),
 Groq, DeepSeek, Mistral, and Perplexity; `AzureOpenAIProvider`; compat
-factories for Together, Fireworks, Cerebras, OpenRouter, DeepInfra, Baseten,
+model packs for Together, Fireworks, Cerebras, OpenRouter, DeepInfra, Baseten,
 Vercel, Gateway, Ollama, LM Studio, and Sarvam (Indic reasoning chat); and
 Apple Foundation Models on-device with Private Cloud Compute. Media packs:
 OpenAI, ElevenLabs, LMNT, Hume, Deepgram, and Sarvam (Bulbul) speech; OpenAI,
@@ -193,14 +199,14 @@ for your own test targets. The full feature-by-feature comparison lives in
 
 ## Test apps
 
-Two real iOS apps live in [Apps/](Apps/), verified on the iOS 27 simulator
+Two real iOS apps live in [Apps/](Apps/), verified on the iOS simulator
 with Xcode 27. Generate the project with [xcodegen](https://github.com/yonaskolb/XcodeGen)
 and run them from Xcode, or drive the simulator from the shell:
 
 ```bash
 cd Apps
 xcodegen generate            # produces SwiftAIApps.xcodeproj
-open SwiftAIApps.xcodeproj   # run StreamTextDemo or RealtimeDemo on a simulator
+open SwiftAIApps.xcodeproj   # choose StreamTextDemo or RealtimeDemo
 ```
 
 StreamTextDemo is a chat UI over `streamText` with the tool loop, talking
@@ -208,11 +214,12 @@ to local Ollama (the simulator shares the Mac's loopback, so no setup).
 RealtimeDemo is a voice UI over `RealtimeSession`: pick xAI, OpenAI, or
 Google, paste an API key (or export it), and it speaks through your
 speakers, streams your microphone, transcribes both sides, and runs a
-client-side tool.
+client-side tool. See the [app README](Apps/README.md) for keys and run
+instructions.
 
 Both apps also take a `--smoke` launch argument for scripted,
 self-verifying runs, and the same sources double as macOS windows via
-`swift run StreamTextDemo` / `swift run RealtimeDemo` from `Apps/`.
+`swift run StreamTextDemo` or `swift run RealtimeDemo` from `Apps/`.
 
 ## Agent skill
 
@@ -265,7 +272,7 @@ The transport layer is pinned against the AI SDK v5+ UI message stream protocol,
 ## Install
 
 ```swift
-.package(url: "https://github.com/zaidmukaddam/swift-ai-sdk.git", from: "0.1.0")
+.package(url: "https://github.com/zaidmukaddam/swift-ai-sdk.git", from: "0.1.1")
 ```
 
 Then add `"AI"` to your target's dependencies. Requires Swift 6 / Xcode 16+. The Foundation Models provider activates automatically when built with the iOS 26 / macOS 26 SDK.

@@ -89,36 +89,38 @@ generic `reasoningConfig` (where `xhigh` becomes `max`).
 
 | Capability | Providers |
 | --- | --- |
-| Embeddings | OpenAI, Azure OpenAI, Cohere, any OpenAI-compatible endpoint |
-| Reranking | Cohere |
-| Image generation | OpenAI (`gpt-image-1`, edits included), fal, Luma, Replicate |
-| Speech | OpenAI, ElevenLabs, LMNT, Hume, Deepgram, Sarvam |
-| Transcription | OpenAI, ElevenLabs, Deepgram, AssemblyAI, Rev.ai, Gladia, Sarvam |
-| Video | xAI, Luma |
-| Realtime voice | OpenAI, xAI, Google (Gemini Live) |
+| [Embeddings](/docs/embeddings) | OpenAI, Azure OpenAI, Cohere, any OpenAI-compatible endpoint |
+| [Reranking](/docs/reranking) | Cohere |
+| [Image generation](/docs/image-generation) | OpenAI (`gpt-image-2`, edits included), fal, Luma, Replicate |
+| [Speech generation](/docs/speech-generation) | OpenAI, ElevenLabs, LMNT, Hume, Deepgram, Sarvam |
+| [Transcription](/docs/transcription) | OpenAI, ElevenLabs, Deepgram, AssemblyAI, Rev.ai, Gladia, Sarvam |
+| [Video generation](/docs/video-generation) | xAI, Luma |
+| [Realtime voice](/docs/realtime) | OpenAI, xAI, Google (Gemini Live) |
+| [Files and skills](/docs/files-and-skills) | OpenAI files; Anthropic files and skills |
 
 The async transcription providers (AssemblyAI, Rev.ai, Gladia) submit,
 poll, and fetch internally — one call either way.
 
-## OpenAI-compatible factories
+## First-class models on compatible endpoints
 
-Preconfigured endpoints with the AI SDK's exact base URLs and
-environment variables:
+Named services get dedicated model types with the AI SDK's exact base URLs
+and environment variables:
 
-| Factory | Endpoint | Key from |
+| Model | Endpoint | Key from |
 | --- | --- | --- |
-| `.togetherAI()` | `api.together.xyz/v1` | `TOGETHER_API_KEY` |
-| `.fireworks()` | `api.fireworks.ai/inference/v1` | `FIREWORKS_API_KEY` |
-| `.cerebras()` | `api.cerebras.ai/v1` | `CEREBRAS_API_KEY` |
-| `.openRouter()` | `openrouter.ai/api/v1` | `OPENROUTER_API_KEY` |
-| `.deepInfra()` | `api.deepinfra.com/v1/openai` | `DEEPINFRA_API_KEY` |
-| `.baseten()` | `inference.baseten.co/v1` | `BASETEN_API_KEY` |
-| `.vercel()` | `api.v0.dev/v1` | `VERCEL_API_KEY` |
-| `.gateway()` | `ai-gateway.vercel.sh/v1` | `AI_GATEWAY_API_KEY` |
-| `.ollama()` | `localhost:11434/v1` | no key |
-| `.lmStudio()` | `localhost:1234/v1` | no key |
-| `.sarvam()` | `api.sarvam.ai/v1` | `SARVAM_API_KEY` |
+| `TogetherAIModel` | `api.together.xyz/v1` | `TOGETHER_API_KEY` |
+| `FireworksModel` | `api.fireworks.ai/inference/v1` | `FIREWORKS_API_KEY` |
+| `CerebrasModel` | `api.cerebras.ai/v1` | `CEREBRAS_API_KEY` |
+| `OpenRouterModel` | `openrouter.ai/api/v1` | `OPENROUTER_API_KEY` |
+| `DeepInfraModel` | `api.deepinfra.com/v1/openai` | `DEEPINFRA_API_KEY` |
+| `BasetenModel` | `inference.baseten.co/v1` | `BASETEN_API_KEY` |
+| `VercelModel` | `api.v0.dev/v1` | `V0_API_KEY` |
+| `AIGatewayModel` | `ai-gateway.vercel.sh/v1` | `AI_GATEWAY_API_KEY` |
+| `OllamaModel` | `localhost:11434/v1` | no key |
+| `LMStudioModel` | `localhost:1234/v1` | no key |
+| `SarvamModel` | `api.sarvam.ai/v1` | `SARVAM_API_KEY` |
 
-Plus the general initializer for any other chat-completions endpoint.
-Hugging Face and Replicate aren't included — neither fits the
-chat-completions wire.
+`OpenAICompatibleProvider` remains the general initializer for any other
+chat-completions endpoint. Replicate has a first-class
+[`ReplicateImageModel`](/docs/providers/replicate), but no language-model pack
+because its prediction API is not the chat-completions wire.

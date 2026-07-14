@@ -3,7 +3,7 @@ title: Serving and testing
 description: Build UI message streams by hand, and test without a network.
 ---
 
-Covers `Examples/21-UIStreamsAndTesting.swift` and `11-Middleware.swift`.
+Covers `Examples/Features/21-UIStreamsAndTesting.swift` and `11-Middleware.swift`.
 You end up serving a chat stream from Swift with status updates woven in,
 and testing the whole thing offline.
 
@@ -95,7 +95,7 @@ Wrap any model to transform requests going in and streams coming out:
 
 ```swift title="Middleware.swift"
 let model = wrapLanguageModel(
-  model: OpenAICompatibleProvider.ollama()("qwen3"),
+  model: OllamaModel("qwen3"),
   middleware: [
     .extractReasoning(tag: "think"),    // <think> spans become reasoning
     .defaultSettings(temperature: 0.2)

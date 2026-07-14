@@ -46,6 +46,36 @@ every CI run, so the code can't rot.
     href="/docs/guides/voice-assistant"
   />
   <Card
+    title="Search and server tools"
+    description="Combine Swift functions with hosted search, files, and code execution."
+    href="/docs/guides/search-and-server-tools"
+  />
+  <Card
+    title="Semantic search"
+    description="Embed a knowledge base, rerank candidates, and answer from context."
+    href="/docs/guides/semantic-search"
+  />
+  <Card
+    title="Transcribe and summarize"
+    description="Turn recordings into timestamped text, typed notes, and speech."
+    href="/docs/guides/transcribe-and-summarize"
+  />
+  <Card
+    title="Images and video"
+    description="Generate a still, edit it, animate it, and persist the result."
+    href="/docs/guides/image-and-video-pipeline"
+  />
+  <Card
+    title="Custom endpoints"
+    description="Connect company gateways, self-hosted servers, and compatible proxies."
+    href="/docs/guides/custom-endpoints"
+  />
+  <Card
+    title="Production reliability"
+    description="Retries, caching, telemetry, typed errors, cancellation, and fallback."
+    href="/docs/guides/production-reliability"
+  />
+  <Card
     title="Offline first"
     description="Apple Intelligence on device, cloud as the fallback."
     href="/docs/guides/offline-first"
@@ -64,7 +94,7 @@ every CI run, so the code can't rot.
 
 ## The example files
 
-Every numbered file in `Examples/` maps to a guide:
+Every numbered file in `Examples/Features/` maps to one or more guides:
 
 | Example | Guide |
 | --- | --- |
@@ -78,7 +108,13 @@ Every numbered file in `Examples/` maps to a guide:
 | 03 OnDeviceOrCloud | [Offline first](/docs/guides/offline-first) |
 | 21 UIStreamsAndTesting, 11 Middleware | [Serving and testing](/docs/guides/server-and-testing) |
 | 08 Embeddings, 12 Image, 13 Speech, 14 Video, 15 Rerank | [Media and embeddings](/docs/guides/media-and-embeddings) |
+| 08 Embeddings, 15 Rerank | [Build semantic search](/docs/guides/semantic-search) |
+| 13 SpeechAndTranscription | [Transcribe and summarize](/docs/guides/transcribe-and-summarize) |
+| 12 ImageGeneration, 14 VideoGeneration | [Generate images and video](/docs/guides/image-and-video-pipeline) |
+| 04 ProviderSwap | [Use custom endpoints and gateways](/docs/guides/custom-endpoints) |
+| 11 Middleware | [Production reliability](/docs/guides/production-reliability) |
+| 23 WorkflowGuides and provider tool examples | [Search and server tools](/docs/guides/search-and-server-tools) |
 
 There are also two real apps in `Apps/`: a ChatGPT-style chat over local
-Ollama and a voice app for the realtime providers. Both run on the iOS
-simulator with `xcodegen generate`.
+Ollama, and a focused realtime voice app covering xAI, OpenAI, and Google.
+Run them on the iOS simulator after `xcodegen generate`.

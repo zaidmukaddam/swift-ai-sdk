@@ -1,0 +1,28 @@
+---
+title: Cerebras
+description: Use Cerebras inference models through a dedicated Swift model type.
+---
+
+`CerebrasModel` reads `CEREBRAS_API_KEY` and targets
+`https://api.cerebras.ai/v1`.
+
+```swift
+let model = CerebrasModel("gpt-oss-120b")
+let result = try await generateText(model: model, prompt: "Say hello.")
+print(result.text)
+```
+
+The initializer accepts optional `apiKey:`, `baseURL:`, `headers:`, and
+`urlSession:` overrides. Tools, structured output, vision, and reasoning
+are encoded when requested and depend on the selected model.
+
+## Models
+
+| Model ID | Status |
+| --- | --- |
+| `gpt-oss-120b` | Production |
+| `gemma-4-31b` | Preview |
+| `zai-glm-4.7` | Preview |
+
+Preview availability can change. Check Cerebras's [model overview](https://inference-docs.cerebras.ai/models/overview)
+or query the authenticated `GET https://api.cerebras.ai/v1/models` endpoint.

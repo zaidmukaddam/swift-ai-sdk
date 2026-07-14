@@ -1,0 +1,29 @@
+---
+title: Baseten
+description: Call Baseten model deployments through a first-class Swift model.
+---
+
+`BasetenModel` reads `BASETEN_API_KEY` and targets
+`https://inference.baseten.co/v1`.
+
+```swift
+let model = BasetenModel("deepseek-ai/DeepSeek-V4-Pro")
+let result = try await generateText(model: model, prompt: "Say hello.")
+print(result.text)
+```
+
+## Models
+
+Current Baseten Model APIs include:
+
+| Model ID |
+| --- |
+| `deepseek-ai/DeepSeek-V4-Pro` |
+| `zai-org/GLM-5.2` |
+| `openai/gpt-oss-120b` |
+| `moonshotai/Kimi-K2.7-Code` |
+
+Baseten also accepts IDs for your own deployments. Query the authenticated
+[`GET /v1/models`](https://docs.baseten.co/inference/model-apis/overview)
+endpoint for the models available to your account. The Swift model also
+accepts `apiKey:`, `baseURL:`, `headers:`, and `urlSession:` overrides.

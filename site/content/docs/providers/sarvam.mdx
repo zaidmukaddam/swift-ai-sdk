@@ -8,20 +8,17 @@ One key (`SARVAM_API_KEY`) drives all of them.
 
 ## Chat
 
-Sarvam's chat endpoint speaks the OpenAI wire, so it's a compatible
-factory:
+Sarvam chat has its own first-class model:
 
 ```swift
-let sarvam = OpenAICompatibleProvider.sarvam()
 let result = try await generateText(
-  model: sarvam("sarvam-105b"),
+  model: SarvamModel("sarvam-105b"),
   prompt: "मुझे भारत के बारे में एक तथ्य बताओ।"
 )
 ```
 
 Base URL `https://api.sarvam.ai/v1`, `Authorization: Bearer` auth. Tools,
-structured output, and streaming ride the shared chat-completions path —
-see [OpenAI-compatible](/docs/providers/openai-compatible).
+structured output, and streaming ride the shared chat-completions path.
 
 The chat models are `sarvam-30b` (64K context) and `sarvam-105b` (128K
 context), both reasoning models: `reasoning` goes out as `reasoning_effort`,
@@ -29,7 +26,7 @@ and the model's thinking streams back as `.reasoningDelta`.
 
 ```swift
 let result = try await generateText(
-  model: sarvam("sarvam-105b"),
+  model: SarvamModel("sarvam-105b"),
   prompt: "Prove that √2 is irrational.",
   reasoning: .high
 )
@@ -40,7 +37,8 @@ print(result.text)
 ## Text to speech
 
 `SarvamSpeechModel` calls the Bulbul voices. Sarvam requires a target
-language; set it on the model or per request:
+language; set it on the model or per request. It uses the shared
+[`generateSpeech`](/docs/speech-generation) API:
 
 ```swift
 let tts = SarvamSpeechModel("bulbul:v3", targetLanguage: "hi-IN")
@@ -71,7 +69,8 @@ and is decoded for you; `outputFormat` sets the returned media type
 ## Transcription
 
 `SarvamTranscriptionModel` posts the audio as multipart to the Saaras
-models. Language and mode ride through `providerOptions`:
+models through the shared [`transcribe`](/docs/transcription) API. Language
+and mode ride through `providerOptions`:
 
 ```swift
 let stt = SarvamTranscriptionModel("saaras:v3")

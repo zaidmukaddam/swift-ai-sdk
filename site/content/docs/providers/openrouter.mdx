@@ -1,0 +1,32 @@
+---
+title: OpenRouter
+description: Access OpenRouter's multi-provider model catalog from Swift.
+---
+
+`OpenRouterModel` reads `OPENROUTER_API_KEY` and targets
+`https://openrouter.ai/api/v1`.
+
+```swift
+let model = OpenRouterModel("anthropic/claude-sonnet-5")
+let result = try await generateText(model: model, prompt: "Say hello.")
+print(result.text)
+```
+
+Use OpenRouter's provider-qualified model IDs. Tools, structured output,
+vision, and reasoning are forwarded through the chat-completions request;
+support depends on the routed model.
+
+## Models
+
+The OpenRouter catalog is dynamic. Current examples include:
+
+| Model ID |
+| --- |
+| `openai/gpt-5.6-sol` |
+| `anthropic/claude-sonnet-5` |
+| `x-ai/grok-4.5` |
+| `z-ai/glm-5.2` |
+
+Query OpenRouter's public [`GET /api/v1/models`](https://openrouter.ai/api/v1/models)
+endpoint or browse the [model catalog](https://openrouter.ai/models) for the
+complete live list, pricing, and context limits.

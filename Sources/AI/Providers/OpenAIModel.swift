@@ -150,6 +150,7 @@ public struct OpenAIChatModel: LanguageModel {
         case xaiChat
         case deepseek
         case mistral
+        case openRouter
         case unsupported
 
         static func forProvider(_ name: String) -> ReasoningWireStyle {
@@ -161,6 +162,7 @@ public struct OpenAIChatModel: LanguageModel {
             case "perplexity": return .unsupported
             case "xai": return .xaiChat
             case "fireworks": return .fireworks
+            case "openrouter": return .openRouter
             default: return .compatible
             }
         }
@@ -226,6 +228,11 @@ public struct OpenAIChatModel: LanguageModel {
         case .mistral:
             guard mistralReasoningModels.contains(modelID) else { return [:] }
             return ["reasoning_effort": .string(reasoning == .none ? "none" : "high")]
+        case .openRouter:
+            // OpenRouter reads reasoning effort from a nested object, not a top-level
+            // reasoning_effort string: https://openrouter.ai/docs/use-cases/reasoning-tokens
+            guard reasoning != .none else { return [:] }
+            return ["reasoning": .object(["effort": .string(coerced(minimal: "low", xhigh: "high"))])]
         case .unsupported:
             return [:]
         }

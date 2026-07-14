@@ -449,7 +449,7 @@ private struct AnthropicEvent: Decodable {
 
 public extension AnthropicModel {
     enum Tools {
-        static func webSearch(
+        public static func webSearch(
             version: String = "web_search_20250305",
             maxUses: Int? = nil,
             allowedDomains: [String]? = nil,
@@ -467,7 +467,7 @@ public extension AnthropicModel {
             )
         }
 
-        static func webFetch(
+        public static func webFetch(
             version: String = "web_fetch_20250910",
             maxUses: Int? = nil,
             allowedDomains: [String]? = nil,
@@ -487,7 +487,7 @@ public extension AnthropicModel {
             )
         }
 
-        static func codeExecution(
+        public static func codeExecution(
             version: String = "code_execution_20250522",
             name: String = "code_execution"
         ) -> ProviderDefinedTool {
@@ -497,7 +497,7 @@ public extension AnthropicModel {
             )
         }
 
-        static func bash(
+        public static func bash(
             version: String = "bash_20250124",
             name: String = "bash"
         ) -> ProviderDefinedTool {
@@ -507,7 +507,7 @@ public extension AnthropicModel {
             )
         }
 
-        static func textEditor(
+        public static func textEditor(
             version: String = "text_editor_20250728",
             maxCharacters: Int? = nil
         ) -> ProviderDefinedTool {
@@ -523,7 +523,7 @@ public extension AnthropicModel {
             )
         }
 
-        static func computer(
+        public static func computer(
             displayWidthPx: Int,
             displayHeightPx: Int,
             displayNumber: Int? = nil,
@@ -542,7 +542,7 @@ public extension AnthropicModel {
             )
         }
 
-        static func memory(
+        public static func memory(
             version: String = "memory_20250818",
             name: String = "memory"
         ) -> ProviderDefinedTool {

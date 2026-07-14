@@ -1,0 +1,27 @@
+---
+title: LMNT
+description: Text-to-speech through LMNT models and voices.
+---
+
+`LMNTSpeechModel` conforms to `SpeechModel` and works with
+[`generateSpeech`](/docs/speech-generation).
+
+```swift
+let result = try await generateSpeech(
+  model: LMNTSpeechModel(), // blizzard
+  text: "Your order is ready.",
+  voice: "ava",
+  outputFormat: "mp3"
+)
+```
+
+The model defaults to `blizzard`, reads `LMNT_API_KEY`, and uses
+`https://api.lmnt.com`. Pass an LMNT voice ID through `voice:`. `speed`,
+`outputFormat`, and additional provider options are forwarded to LMNT.
+
+## Models
+
+`blizzard` is LMNT's current Blizzard 2.0 speech model. LMNT selects the
+speaker separately through the `voice:` argument. See LMNT's
+[model overview](https://docs.lmnt.com/models/overview) for current model and
+language support.

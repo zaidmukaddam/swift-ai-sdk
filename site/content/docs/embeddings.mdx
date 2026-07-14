@@ -1,23 +1,26 @@
 ---
-title: Embeddings and reranking
-description: embed, embedMany, cosine similarity, and rerank.
+title: Embeddings
+description: Embed one or many values and compare vectors with cosine similarity.
 icon: Network
 ---
 
-## Embedding a value
+Embedding models conform to `EmbeddingModel`, so OpenAI, Cohere, and custom
+OpenAI-compatible embedding endpoints use the same functions.
+
+## Embed one value
 
 ```swift
 let model = OpenAIEmbeddingModel("text-embedding-3-small")
-
 let result = try await embed(model: model, value: "sunny day at the beach")
-result.embedding      // [Double]
-result.usage          // token accounting
+
+result.embedding // [Double]
+result.usage     // token accounting
 ```
 
-## Embedding many values
+## Embed many values
 
-`embedMany` batches automatically; pass `maxBatchSize` to respect a
-provider's limit and it splits the requests for you:
+`embedMany` preserves input order and can split inputs into provider-sized
+batches:
 
 ```swift
 let result = try await embedMany(
@@ -25,38 +28,35 @@ let result = try await embedMany(
   values: documents,
   maxBatchSize: 96
 )
-result.embeddings     // one vector per input, in order
+
+result.embeddings // one vector per input
 ```
+
+The batches run sequentially, retry independently, and combine their usage.
 
 ## Similarity
 
 ```swift
 let query = try await embed(model: model, value: "coastal weather")
+let documents = try await embedMany(model: model, values: values)
 
-let ranked = zip(documents, result.embeddings)
-  .map { document, vector in
-    (document, cosineSimilarity(query.embedding, vector))
+let ranked = zip(values, documents.embeddings)
+  .map { value, vector in
+    (value, cosineSimilarity(query.embedding, vector))
   }
   .sorted { $0.1 > $1.1 }
 ```
 
-Cohere embeddings plug in through `CohereEmbeddingModel` with the same
-calls.
+`cosineSimilarity` returns `0` for empty vectors, mismatched lengths, or a
+zero-norm vector.
 
-## Reranking
+## Models
 
-When you already have candidates, a reranker orders them by relevance in
-one call instead of N similarity computations:
+| Provider | Model type | Key |
+| --- | --- | --- |
+| [OpenAI](/docs/providers/openai) | `OpenAIEmbeddingModel("text-embedding-3-small")` | `OPENAI_API_KEY` |
+| [Cohere](/docs/providers/cohere) | `CohereEmbeddingModel("embed-v4.0")` | `COHERE_API_KEY` |
+| [Custom compatible endpoint](/docs/providers/openai-compatible) | `OpenAIEmbeddingModel(..., baseURL: ...)` | Explicit or provider-specific |
 
-```swift
-let result = try await rerank(
-  model: CohereRerankingModel("rerank-v4-fast"),
-  query: "warm places in january",
-  documents: candidates,
-  topN: 5
-)
-
-for ranked in result.rankedDocuments {
-  print(String(format: "%.3f", ranked.relevanceScore), ranked.document)
-}
-```
+If you already have candidate documents and want a provider to reorder them,
+use [reranking](/docs/reranking).

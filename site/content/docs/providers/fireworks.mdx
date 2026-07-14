@@ -1,0 +1,36 @@
+---
+title: Fireworks
+description: Stream Fireworks models with tools, structured output, and reasoning.
+---
+
+`FireworksModel` reads `FIREWORKS_API_KEY` and targets
+`https://api.fireworks.ai/inference/v1`.
+
+```swift
+let model = FireworksModel("accounts/fireworks/models/glm-5p2")
+let result = streamText(model: model, prompt: "Say hello.")
+
+for try await text in result.textStream {
+  print(text, terminator: "")
+}
+```
+
+Fireworks accepts `low`, `medium`, and `high` reasoning effort, so
+`.minimal` becomes `low` and `.xhigh` becomes `high`. Other capabilities
+depend on the selected model.
+
+## Models
+
+Current serverless examples include:
+
+| Model ID |
+| --- |
+| `accounts/fireworks/models/glm-5p2` |
+| `accounts/fireworks/models/qwen3p7-max` |
+| `accounts/fireworks/models/deepseek-v4-pro` |
+| `accounts/fireworks/routers/kimi-k2p6-fast` |
+
+The catalog rotates, and custom deployments use account-qualified IDs. Browse
+the live [Fireworks model library](https://fireworks.ai/models) and
+[serverless serving-path documentation](https://docs.fireworks.ai/serverless/serving-paths)
+before pinning a model in production.

@@ -20,8 +20,17 @@ final class MediaPacksTests: XCTestCase {
         XCTAssertEqual(body["text"], "Hello")
     }
 
+    func testElevenLabsSpeechEscapesVoiceIDPathSeparator() throws {
+        let model = ElevenLabsSpeechModel("eleven_multilingual_v2", apiKey: "k")
+        let urlRequest = try model.buildURLRequest(SpeechModelRequest(text: "Hi", voice: "custom/id"))
+        XCTAssertEqual(
+            urlRequest.url?.absoluteString,
+            "https://api.elevenlabs.io/v1/text-to-speech/custom%2Fid"
+        )
+    }
+
     func testLMNTSpeechWire() throws {
-        let model = LMNTSpeechModel("aurora", apiKey: "k")
+        let model = LMNTSpeechModel("blizzard", apiKey: "k")
         let urlRequest = try model.buildURLRequest(SpeechModelRequest(text: "Hi"))
         XCTAssertEqual(
             urlRequest.url?.absoluteString, "https://api.lmnt.com/v1/ai/speech/bytes"
@@ -29,7 +38,7 @@ final class MediaPacksTests: XCTestCase {
         XCTAssertEqual(urlRequest.value(forHTTPHeaderField: "x-api-key"), "k")
         let body = try JSONDecoder().decode(JSONValue.self, from: urlRequest.httpBody!)
         XCTAssertEqual(body["voice"], "ava")
-        XCTAssertEqual(body["model"], "aurora")
+        XCTAssertEqual(body["model"], "blizzard")
     }
 
     func testHumeSpeechWire() throws {
@@ -119,13 +128,19 @@ final class MediaPacksTests: XCTestCase {
         XCTAssertTrue(body.contains("name=\"mode\""))
     }
 
-    func testSarvamChatFactory() {
-        let sarvam = OpenAICompatibleProvider.sarvam(apiKey: "k")
-        XCTAssertEqual(sarvam.name, "sarvam")
-        XCTAssertEqual(sarvam.baseURL.absoluteString, "https://api.sarvam.ai/v1")
-        let model = sarvam("sarvam-105b")
+    func testSarvamFileExtensionNormalizesCase() {
+        XCTAssertEqual(SarvamTranscriptionModel.fileExtension(for: "audio/MP3"), "mp3")
+        XCTAssertEqual(SarvamTranscriptionModel.fileExtension(for: "audio/X-WAV"), "wav")
+    }
+
+    func testSarvamChatModel() {
+        let model = SarvamModel("sarvam-105b", apiKey: "k")
         XCTAssertEqual(model.provider, "sarvam")
         XCTAssertEqual(model.modelID, "sarvam-105b")
+        XCTAssertEqual(
+            model.engine.requestURL(path: "chat/completions").absoluteString,
+            "https://api.sarvam.ai/v1/chat/completions"
+        )
     }
 
     func testElevenLabsTranscriptionIsMultipart() {
@@ -139,6 +154,7 @@ final class MediaPacksTests: XCTestCase {
         let body = String(decoding: urlRequest.httpBody ?? Data(), as: UTF8.self)
         XCTAssertTrue(body.contains("name=\"file\""))
         XCTAssertTrue(body.contains("name=\"model_id\""))
+        XCTAssertTrue(body.contains("scribe_v2"))
     }
 
     func testAssemblyAIPollStates() throws {
@@ -159,6 +175,19 @@ final class MediaPacksTests: XCTestCase {
         XCTAssertThrowsError(try AssemblyAITranscriptionModel.resolvePoll(
             ["status": "error", "error": "bad audio"]
         ))
+    }
+
+    func testAssemblyAIPollStatusMatchIsCaseInsensitive() throws {
+        let done = try AssemblyAITranscriptionModel.resolvePoll([
+            "status": "Completed", "text": "hi"
+        ])
+        XCTAssertEqual(done?.text, "hi")
+    }
+
+    func testPollNanosecondsClampsNegativeIntervals() {
+        XCTAssertEqual(pollNanoseconds(-5), 0)
+        XCTAssertEqual(pollNanoseconds(0), 0)
+        XCTAssertEqual(pollNanoseconds(0.5), 500_000_000)
     }
 
     func testRevAITranscriptParsing() throws {
@@ -191,6 +220,30 @@ final class MediaPacksTests: XCTestCase {
         XCTAssertEqual(done?.text, "bonjour")
         XCTAssertEqual(done?.language, "fr")
         XCTAssertThrowsError(try GladiaTranscriptionModel.resolvePoll(["status": "error"]))
+    }
+
+    func testGladiaPollStatusMatchIsCaseInsensitive() throws {
+        let done = try GladiaTranscriptionModel.resolvePoll([
+            "status": "Done",
+            "result": ["transcription": ["full_transcript": "hi", "utterances": []]]
+        ])
+        XCTAssertEqual(done?.text, "hi")
+    }
+
+    func testCurrentAsyncTranscriptionDefaults() {
+        XCTAssertEqual(AssemblyAITranscriptionModel(apiKey: "k").modelID, "universal-3-5-pro")
+        XCTAssertEqual(GladiaTranscriptionModel(apiKey: "k").modelID, "solaria-1")
+    }
+
+    func testGladiaCreateBodyOmitsUnsupportedModelField() {
+        // Gladia's /v2/pre-recorded schema has no model-selection field.
+        let body = GladiaTranscriptionModel.createBody(
+            audioURL: "https://example.com/audio.wav",
+            providerOptions: ["detect_language": true]
+        )
+        XCTAssertEqual(body["audio_url"], "https://example.com/audio.wav")
+        XCTAssertNil(body["model"])
+        XCTAssertEqual(body["detect_language"], true)
     }
 
     func testFalImageWire() throws {

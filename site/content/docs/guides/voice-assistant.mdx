@@ -3,7 +3,7 @@ title: A voice assistant
 description: Live speech both ways, with a client-side tool.
 ---
 
-Covers `Examples/22-Realtime.swift`. You end up talking to a model that
+Covers `Examples/Features/22-Realtime.swift`. You end up talking to a model that
 talks back through the speakers and can call your code mid-conversation.
 The full app version lives in `Apps/RealtimeDemo`.
 
@@ -45,7 +45,8 @@ let session = RealtimeSession(
     turnDetection: .init(type: .serverVAD)
   ),
   onToolCall: { call in
-    call.name == "getWeather" ? .string("sunny, 31 C") : nil
+    guard call.name == "getWeather" else { return nil }
+    return try await weatherTool.execute(call.arguments)
   }
 )
 
@@ -54,6 +55,8 @@ session.connect(secret: secret)
 
 Returning nil from `onToolCall` defers the answer; submit it later with
 `session.addToolOutput(callID:output:)`.
+Here `weatherTool` is the Open-Meteo-backed tool from
+[An agent with tools](/docs/guides/agent-with-tools), not a canned response.
 </Step>
 
 <Step>
@@ -98,7 +101,10 @@ import AI
 
 @available(iOS 17.0, macOS 14.0, *)
 @MainActor
-func startVoiceSession(secret: RealtimeClientSecret) -> RealtimeSession {
+func startVoiceSession(
+  secret: RealtimeClientSecret,
+  weatherTool: Tool
+) -> RealtimeSession {
   let session = RealtimeSession(
     model: XaiRealtimeModel("grok-voice-latest"),
     sessionConfig: RealtimeSessionConfig(
@@ -107,7 +113,8 @@ func startVoiceSession(secret: RealtimeClientSecret) -> RealtimeSession {
       turnDetection: .init(type: .serverVAD)
     ),
     onToolCall: { call in
-      call.name == "getWeather" ? .string("sunny, 31 C") : nil
+      guard call.name == "getWeather" else { return nil }
+      return try await weatherTool.execute(call.arguments)
     }
   )
 

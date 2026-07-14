@@ -1,0 +1,43 @@
+---
+title: Replicate
+description: Image generation with Replicate-hosted models.
+---
+
+`ReplicateImageModel` conforms to `ImageModel` and works with
+[`generateImage`](/docs/image-generation).
+
+```swift
+let result = try await generateImage(
+  model: ReplicateImageModel("openai/gpt-image-2"),
+  prompt: "A handmade paper city at sunrise",
+  aspectRatio: "16:9",
+  seed: 7
+)
+```
+
+The model reads `REPLICATE_API_TOKEN` and uses
+`https://api.replicate.com/v1`. Pass the Replicate model slug as the first
+initializer argument.
+
+Shared image settings become Replicate input fields. Additional model-specific
+input goes under the `replicate` provider key:
+
+```swift
+providerOptions: ["replicate": ["output_format": "png"]]
+```
+
+## Models
+
+Current official image models include:
+
+| Model slug |
+| --- |
+| `openai/gpt-image-2` |
+| `google/nano-banana-2-lite` |
+| `prunaai/p-image` |
+| `prunaai/p-image-try-on` |
+
+Replicate's catalog changes frequently. Browse the live
+[official-model collection](https://replicate.com/collections/official) or
+pass any compatible `owner/model` slug. A pinned version can be written as
+`owner/model:version`.

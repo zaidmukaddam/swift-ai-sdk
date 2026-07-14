@@ -7,6 +7,33 @@ icon: History
 <Steps>
 
 <Step>
+### 0.1.1
+
+#### Providers
+
+- First-class model packs for AI Gateway, Baseten, Cerebras, DeepInfra,
+  Fireworks, LM Studio, Ollama, OpenRouter, Sarvam, Together AI, and Vercel —
+  dedicated types (`BasetenModel`, `CerebrasModel`, and so on) built on a
+  shared OpenAI-compatible base, replacing the `OpenAICompatibleProvider`
+  factory functions for these providers (still available, deprecated).
+  `MistralModel`, `PerplexityModel`, `DeepSeekModel`, and `GroqModel` moved
+  onto the same shared base for consistency, and every pack listed here now
+  accepts `queryParams`.
+- Together AI, DeepInfra, and Baseten also get dedicated embedding model
+  types: `TogetherAIEmbeddingModel`, `DeepInfraEmbeddingModel`, and
+  `BasetenEmbeddingModel`.
+- OpenRouter's reasoning effort now maps to its actual nested
+  `reasoning: {"effort": ...}` wire format instead of the generic
+  `reasoning_effort` field other OpenAI-compatible providers use.
+
+#### Examples
+
+- Reorganized into `Examples/Features/` (the same numbered walkthroughs as
+  before, plus a new 23-WorkflowGuides) and `Examples/Providers/<Name>`, a
+  minimal runnable example for every supported provider.
+</Step>
+
+<Step>
 ### 0.1.0
 
 The first release. A Swift port of the Vercel AI SDK for iOS and macOS.

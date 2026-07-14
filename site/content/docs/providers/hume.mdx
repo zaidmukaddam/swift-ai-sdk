@@ -1,0 +1,29 @@
+---
+title: Hume
+description: Expressive text-to-speech with Hume voices.
+---
+
+`HumeSpeechModel` conforms to `SpeechModel` and works with
+[`generateSpeech`](/docs/speech-generation).
+
+```swift
+let result = try await generateSpeech(
+  model: HumeSpeechModel(),
+  text: "I can't believe we made it!",
+  voice: voiceID,
+  instructions: "Relieved, warm, and slightly breathless",
+  outputFormat: "mp3"
+)
+```
+
+The model reads `HUME_API_KEY` and uses `https://api.hume.ai`. `voice:` maps
+to the Hume voice ID, `instructions:` becomes the utterance description, and
+`speed:` controls utterance speed. The default model ID is `default` because
+the voice and utterance settings drive the request.
+
+## Model selection
+
+Hume's TTS endpoint does not expose a separate model catalog or accept a
+model ID in this request. `HumeSpeechModel` keeps `default` only as its SDK
+identity; select a saved or library voice with `voice:`. See Hume's
+[voice selection documentation](https://dev.hume.ai/docs/text-to-speech-tts/voice).

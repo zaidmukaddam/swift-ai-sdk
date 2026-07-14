@@ -1,0 +1,151 @@
+---
+title: Build semantic search
+description: Embed a knowledge base, rerank candidates, and answer from retrieved context.
+---
+
+Covers `Examples/Features/08-Embeddings.swift`, `15-Rerank.swift`, and
+`23-WorkflowGuides.swift`. You end up with a small retrieval pipeline:
+vector search finds candidates, a reranker improves their order, and a
+language model answers only from the selected passages.
+
+<Steps>
+<Step>
+### Embed the knowledge base
+
+Split documents into useful passages before embedding them. Keep each
+passage with its vector and any metadata your UI needs.
+
+```swift
+struct Passage: Sendable {
+  let text: String
+  let embedding: [Double]
+}
+
+func buildIndex(_ texts: [String]) async throws -> [Passage] {
+  let result = try await embedMany(
+    model: OpenAIEmbeddingModel("text-embedding-3-small"),
+    values: texts,
+    maxBatchSize: 96
+  )
+  return zip(texts, result.embeddings).map(Passage.init)
+}
+```
+
+Persist these vectors in your database for a real app. Store the embedding
+model id beside them: vectors from different models should not share an
+index.
+</Step>
+
+<Step>
+### Retrieve by cosine similarity
+
+Embed the question with the same model, score every passage, and keep a
+generous candidate set:
+
+```swift
+let query = try await embed(
+  model: OpenAIEmbeddingModel("text-embedding-3-small"),
+  value: question
+)
+
+let candidates = index
+  .map { ($0.text, cosineSimilarity(query.embedding, $0.embedding)) }
+  .sorted { $0.1 > $1.1 }
+  .prefix(8)
+  .map(\.0)
+```
+
+For a large collection, let a vector database perform this nearest-neighbor
+step. The rest of the pipeline stays the same.
+</Step>
+
+<Step>
+### Rerank the candidates
+
+Embedding similarity is fast; a reranker is more precise. Run it only over
+the shortlist:
+
+```swift
+let reranked = try await rerank(
+  model: CohereRerankingModel("rerank-v4-fast"),
+  query: question,
+  documents: candidates,
+  topN: 3
+)
+
+let context = reranked.rankedDocuments
+  .map(\.document)
+  .joined(separator: "\n\n")
+```
+</Step>
+
+<Step>
+### Ground the answer
+
+Put the retrieved passages in a clearly delimited context block and tell the
+model what to do when the answer is missing.
+
+```swift
+let result = try await generateText(
+  model: OpenAIModel("gpt-5.6-sol"),
+  system: "Answer only from the supplied context. Say when the answer is absent.",
+  prompt: "Context:\n\(context)\n\nQuestion: \(question)"
+)
+print(result.text)
+```
+
+Keep passage ids or source URLs in `Passage` if you want the UI to show
+citations beside the answer.
+</Step>
+</Steps>
+
+## Final code
+
+```swift title="SemanticSearch.swift"
+import AI
+
+struct Passage: Sendable {
+  let text: String
+  let embedding: [Double]
+}
+
+func buildIndex(_ texts: [String]) async throws -> [Passage] {
+  let result = try await embedMany(
+    model: OpenAIEmbeddingModel("text-embedding-3-small"),
+    values: texts,
+    maxBatchSize: 96
+  )
+  return zip(texts, result.embeddings).map(Passage.init)
+}
+
+func answer(question: String, index: [Passage]) async throws -> String {
+  let query = try await embed(
+    model: OpenAIEmbeddingModel("text-embedding-3-small"),
+    value: question
+  )
+  let candidates = index
+    .map { ($0.text, cosineSimilarity(query.embedding, $0.embedding)) }
+    .sorted { $0.1 > $1.1 }
+    .prefix(8)
+    .map(\.0)
+
+  guard !candidates.isEmpty else { return "No relevant context found." }
+
+  let reranked = try await rerank(
+    model: CohereRerankingModel("rerank-v4-fast"),
+    query: question,
+    documents: candidates,
+    topN: 3
+  )
+  let context = reranked.rankedDocuments.map(\.document).joined(separator: "\n\n")
+
+  return try await generateText(
+    model: OpenAIModel("gpt-5.6-sol"),
+    system: "Answer only from the supplied context. Say when the answer is absent.",
+    prompt: "Context:\n\(context)\n\nQuestion: \(question)"
+  ).text
+}
+```
+
+See [Embeddings](/docs/embeddings) for batching and model choices, and
+[Reranking](/docs/reranking) for the full reranking result.

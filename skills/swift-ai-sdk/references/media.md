@@ -70,7 +70,7 @@ Models (`SpeechModel`):
 ```swift
 OpenAISpeechModel(_ modelID: String, ...)                                    // OPENAI_API_KEY
 ElevenLabsSpeechModel(_ modelID: String, ...)                                // ELEVENLABS_API_KEY
-LMNTSpeechModel(_ modelID: String = "aurora", ...)                           // LMNT_API_KEY
+LMNTSpeechModel(_ modelID: String = "blizzard", ...)                         // LMNT_API_KEY
 HumeSpeechModel(_ modelID: String = "default", ...)                          // HUME_API_KEY, voice-only
 DeepgramSpeechModel(_ modelID: String = "aura-2-thalia-en", ...)             // DEEPGRAM_API_KEY
 SarvamSpeechModel(_ modelID: String = "bulbul:v3", apiKey: String? = nil,
@@ -111,11 +111,11 @@ Models (`TranscriptionModel`):
 
 ```swift
 OpenAITranscriptionModel(_ modelID: String, ...)                     // OPENAI_API_KEY, sync multipart
-ElevenLabsTranscriptionModel(_ modelID: String = "scribe_v1", ...)   // ELEVENLABS_API_KEY, sync
+ElevenLabsTranscriptionModel(_ modelID: String = "scribe_v2", ...)   // ELEVENLABS_API_KEY, sync
 DeepgramTranscriptionModel(_ modelID: String = "nova-3", ...)        // DEEPGRAM_API_KEY, sync
-AssemblyAITranscriptionModel(_ modelID: String = "universal", ...)   // ASSEMBLYAI_API_KEY, async
+AssemblyAITranscriptionModel(_ modelID: String = "universal-3-5-pro", ...) // ASSEMBLYAI_API_KEY, async
 RevAITranscriptionModel(_ modelID: String = "machine", ...)          // REVAI_API_KEY, async
-GladiaTranscriptionModel(_ modelID: String = "default", ...)         // GLADIA_API_KEY, async
+GladiaTranscriptionModel(_ modelID: String = "solaria-1", ...)       // GLADIA_API_KEY, async
 SarvamTranscriptionModel(_ modelID: String = "saaras:v3", ...)       // SARVAM_API_KEY, sync multipart
 ```
 

@@ -1,0 +1,56 @@
+---
+title: ElevenLabs
+description: Speech synthesis and audio transcription.
+---
+
+`ELEVENLABS_API_KEY` powers both ElevenLabs model types.
+
+## Speech
+
+```swift
+let result = try await generateSpeech(
+  model: ElevenLabsSpeechModel("eleven_multilingual_v2"),
+  text: "Welcome to the show.",
+  voice: voiceID,
+  outputFormat: "mp3"
+)
+```
+
+Pass the ElevenLabs model ID to `ElevenLabsSpeechModel` and the voice ID to
+`voice:`. The result contains the audio bytes and media type. See
+[speech generation](/docs/speech-generation) for all shared options.
+
+## Transcription
+
+```swift
+let result = try await transcribe(
+  model: ElevenLabsTranscriptionModel(), // scribe_v2
+  audio: audioData,
+  mediaType: "audio/mpeg"
+)
+print(result.text)
+```
+
+`ElevenLabsTranscriptionModel` defaults to `scribe_v2` and uses a synchronous
+multipart upload. See [transcription](/docs/transcription) for the common result
+shape.
+
+## Models
+
+### Speech models
+
+| Model ID | Use |
+| --- | --- |
+| `eleven_v3` | Most expressive speech generation |
+| `eleven_multilingual_v2` | Stable multilingual speech |
+| `eleven_flash_v2_5` | Low-latency multilingual speech |
+
+### Transcription models
+
+| Model ID | Use |
+| --- | --- |
+| `scribe_v2` | Current prerecorded speech-to-text model |
+| `scribe_v2_realtime` | Realtime transcription; not used by this prerecorded pack |
+
+See ElevenLabs's live [model overview](https://elevenlabs.io/docs/overview/models)
+for languages, latency, and availability.

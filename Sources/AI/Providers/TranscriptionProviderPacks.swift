@@ -3,6 +3,11 @@ import Foundation
 import FoundationNetworking
 #endif
 
+/// Negative poll intervals would otherwise make the `UInt64` conversion trap.
+func pollNanoseconds(_ interval: TimeInterval) -> UInt64 {
+    UInt64(max(interval, 0) * 1_000_000_000)
+}
+
 public struct DeepgramTranscriptionModel: TranscriptionModel {
     public let provider = "deepgram"
     public let modelID: String
@@ -133,10 +138,11 @@ public struct SarvamTranscriptionModel: TranscriptionModel {
     }
 
     static func fileExtension(for mediaType: String) -> String {
-        switch mediaType.split(separator: "/").last.map(String.init) {
-        case "mpeg", "mp3": "mp3"
-        case "x-wav", "wave": "wav"
-        default: mediaType.split(separator: "/").last.map(String.init) ?? "wav"
+        let subtype = mediaType.split(separator: "/").last.map { $0.lowercased() }
+        switch subtype {
+        case "mpeg", "mp3": return "mp3"
+        case "x-wav", "wave": return "wav"
+        default: return subtype ?? "wav"
         }
     }
 }
@@ -153,7 +159,7 @@ public struct AssemblyAITranscriptionModel: TranscriptionModel {
     private let pollTimeout: TimeInterval
 
     public init(
-        _ modelID: String = "universal",
+        _ modelID: String = "universal-3-5-pro",
         apiKey: String? = nil,
         baseURL: URL = URL(string: "https://api.assemblyai.com")!,
         headers: [String: String] = [:],
@@ -204,7 +210,7 @@ public struct AssemblyAITranscriptionModel: TranscriptionModel {
 
         let deadline = Date().addingTimeInterval(pollTimeout)
         while true {
-            try await Task.sleep(nanoseconds: UInt64(pollInterval * 1_000_000_000))
+            try await Task.sleep(nanoseconds: pollNanoseconds(pollInterval))
             if Date() > deadline {
                 throw AIError.transport("AssemblyAI transcription timed out")
             }
@@ -217,7 +223,7 @@ public struct AssemblyAITranscriptionModel: TranscriptionModel {
     }
 
     static func resolvePoll(_ status: JSONValue) throws -> TranscriptionModelResponse? {
-        switch status["status"]?.stringValue {
+        switch status["status"]?.stringValue?.lowercased() {
         case "completed":
             let words = status["words"]?.arrayValue ?? []
             return TranscriptionModelResponse(
@@ -274,7 +280,8 @@ public struct RevAITranscriptionModel: TranscriptionModel {
 
     public func transcribe(_ request: TranscriptionModelRequest) async throws -> TranscriptionModelResponse {
         var form = MultipartForm(boundary: "swift-ai-sdk-revai")
-        form.addField(name: "options", value: #"{"transcriber":"\#(modelID)"}"#)
+        let optionsJSON = try JSONEncoder().encode(JSONValue.object(["transcriber": .string(modelID)]))
+        form.addField(name: "options", value: String(decoding: optionsJSON, as: UTF8.self))
         form.addFile(name: "media", filename: "audio", mediaType: request.mediaType, data: request.audio)
 
         var submit = URLRequest(url: baseURL.appendingPathComponent("speechtotext/v1/jobs"))
@@ -293,13 +300,13 @@ public struct RevAITranscriptionModel: TranscriptionModel {
 
         let deadline = Date().addingTimeInterval(pollTimeout)
         while true {
-            try await Task.sleep(nanoseconds: UInt64(pollInterval * 1_000_000_000))
+            try await Task.sleep(nanoseconds: pollNanoseconds(pollInterval))
             if Date() > deadline { throw AIError.transport("Rev.ai transcription timed out") }
             var poll = URLRequest(url: baseURL.appendingPathComponent("speechtotext/v1/jobs/\(jobID)"))
             poll.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
             let (pollData, _) = try await urlSession.data(for: poll)
             let status = try JSONDecoder().decode(JSONValue.self, from: pollData)
-            switch status["status"]?.stringValue {
+            switch status["status"]?.stringValue?.lowercased() {
             case "transcribed":
                 return try await fetchTranscript(jobID: jobID)
             case "failed":
@@ -359,7 +366,7 @@ public struct GladiaTranscriptionModel: TranscriptionModel {
     private let pollTimeout: TimeInterval
 
     public init(
-        _ modelID: String = "default",
+        _ modelID: String = "solaria-1",
         apiKey: String? = nil,
         baseURL: URL = URL(string: "https://api.gladia.io")!,
         headers: [String: String] = [:],
@@ -397,10 +404,7 @@ public struct GladiaTranscriptionModel: TranscriptionModel {
         create.httpMethod = "POST"
         create.setValue(apiKey, forHTTPHeaderField: "x-gladia-key")
         create.setValue("application/json", forHTTPHeaderField: "content-type")
-        var body: [String: JSONValue] = ["audio_url": .string(audioURL)]
-        if case .object(let options)? = request.providerOptions {
-            for (key, value) in options { body[key] = value }
-        }
+        let body = Self.createBody(audioURL: audioURL, providerOptions: request.providerOptions)
         create.httpBody = try JSONEncoder().encode(JSONValue.object(body))
         let (createData, createResponse) = try await urlSession.data(for: create)
         if let http = createResponse as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
@@ -413,7 +417,7 @@ public struct GladiaTranscriptionModel: TranscriptionModel {
 
         let deadline = Date().addingTimeInterval(pollTimeout)
         while true {
-            try await Task.sleep(nanoseconds: UInt64(pollInterval * 1_000_000_000))
+            try await Task.sleep(nanoseconds: pollNanoseconds(pollInterval))
             if Date() > deadline { throw AIError.transport("Gladia transcription timed out") }
             var poll = URLRequest(url: resultURL)
             poll.setValue(apiKey, forHTTPHeaderField: "x-gladia-key")
@@ -423,8 +427,20 @@ public struct GladiaTranscriptionModel: TranscriptionModel {
         }
     }
 
+    // Gladia's /v2/pre-recorded schema has no model-selection field, so modelID
+    // only identifies this TranscriptionModel — it isn't sent in the request body.
+    static func createBody(
+        audioURL: String, providerOptions: JSONValue?
+    ) -> [String: JSONValue] {
+        var body: [String: JSONValue] = ["audio_url": .string(audioURL)]
+        if case .object(let options)? = providerOptions {
+            for (key, value) in options { body[key] = value }
+        }
+        return body
+    }
+
     static func resolvePoll(_ status: JSONValue) throws -> TranscriptionModelResponse? {
-        switch status["status"]?.stringValue {
+        switch status["status"]?.stringValue?.lowercased() {
         case "done":
             let transcription = status["result"]?["transcription"]
             let utterances = transcription?["utterances"]?.arrayValue ?? []

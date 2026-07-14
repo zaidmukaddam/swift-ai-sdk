@@ -1,0 +1,35 @@
+---
+title: Gladia
+description: Asynchronous prerecorded-audio transcription behind one await.
+---
+
+`GladiaTranscriptionModel` conforms to `TranscriptionModel` and works with
+[`transcribe`](/docs/transcription).
+
+```swift
+let result = try await transcribe(
+  model: GladiaTranscriptionModel("solaria-3"),
+  audio: audioData,
+  mediaType: "audio/wav",
+  providerOptions: ["detect_language": true]
+)
+```
+
+The model reads `GLADIA_API_KEY`, uses `https://api.gladia.io`, and defaults
+to `solaria-1`. It uploads the audio, starts a prerecorded job, and polls the
+returned result URL internally.
+
+Use `pollInterval` and `pollTimeout` on the initializer to tune polling.
+Completed utterances become `result.segments` when Gladia returns them.
+
+## Models
+
+| Model ID | Use |
+| --- | --- |
+| `solaria-3` | Latest high-accuracy prerecorded model |
+| `solaria-1` | Generalist model and SDK default |
+
+`solaria-3` is currently limited to asynchronous prerecorded transcription,
+which matches this provider pack. See Gladia's
+[prerecorded STT guide](https://docs.gladia.io/chapters/pre-recorded-stt/getting-started)
+for current availability and language guidance.

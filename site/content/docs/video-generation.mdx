@@ -1,0 +1,42 @@
+---
+title: Video generation
+description: Generate video and animate still images with a shared VideoModel API.
+icon: Image
+---
+
+Video providers conform to `VideoModel` and work with `generateVideo`.
+
+```swift
+let result = try await generateVideo(
+  model: XaiVideoModel("grok-imagine-video-1.5"),
+  prompt: "A paper boat drifting down a rainy street, cinematic",
+  aspectRatio: "16:9",
+  duration: 6
+)
+
+print(result.urls.first?.absoluteString ?? "no URL")
+```
+
+Providers render asynchronously, but their model types handle polling. Some
+return URLs and others return inline bytes, so inspect `result.urls` and
+`result.videos`; `result.video` is the first inline video when present.
+
+## Animate a still
+
+```swift
+let result = try await generateVideo(
+  model: LumaVideoModel(),
+  prompt: "The fox blinks and snow falls gently",
+  image: ImageContent(url: sourceImageURL)
+)
+```
+
+The shared options are `image`, `aspectRatio`, `duration`, `providerOptions`,
+and `maxRetries`.
+
+## Models
+
+| Provider | Model type | Default or example model | Key |
+| --- | --- | --- | --- |
+| [xAI](/docs/providers/xai) | `XaiVideoModel` | `grok-imagine-video-1.5` | `XAI_API_KEY` |
+| [Luma](/docs/providers/luma) | `LumaVideoModel` | `ray-2` | `LUMA_API_KEY` |

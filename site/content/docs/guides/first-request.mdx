@@ -3,7 +3,7 @@ title: Your first request
 description: Generate, stream, and swap providers in five minutes.
 ---
 
-Covers `Examples/01-GenerateText.swift`, `02-StreamText.swift`, and
+Covers `Examples/Features/01-GenerateText.swift`, `02-StreamText.swift`, and
 `04-ProviderSwap.swift`.
 
 <Steps>
@@ -28,7 +28,7 @@ argument. For zero setup, use Ollama on your Mac:
 ```swift
 let model = AnthropicModel("claude-sonnet-5")                  // ANTHROPIC_API_KEY
 // or, no key needed:
-let local = OpenAICompatibleProvider.ollama()("granite4.1:3b")
+let local = OllamaModel("granite4.1:3b")
 ```
 </Step>
 
@@ -118,7 +118,7 @@ let models: [any LanguageModel] = [
   XaiModel("grok-4.5"),                                    // XAI_API_KEY
   GroqModel("llama-3.3-70b-versatile"),                    // GROQ_API_KEY
   GoogleModel("gemini-3.5-flash"),                         // GOOGLE_GENERATIVE_AI_API_KEY
-  OpenAICompatibleProvider.ollama()("llama3.3")            // local, no key
+  OllamaModel("gemma4")                                    // local, no key
 ]
 
 for model in models.prefix(3) {

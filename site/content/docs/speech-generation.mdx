@@ -1,0 +1,44 @@
+---
+title: Speech generation
+description: Turn text into audio with a shared SpeechModel API.
+icon: AudioWaveform
+---
+
+Every speech provider conforms to `SpeechModel` and works with
+`generateSpeech`.
+
+```swift
+let result = try await generateSpeech(
+  model: OpenAISpeechModel("gpt-4o-mini-tts"),
+  text: "The quick brown fox jumped over the lazy dog.",
+  voice: "alloy",
+  outputFormat: "mp3"
+)
+
+try result.audio.write(to: URL(fileURLWithPath: "/tmp/hello.mp3"))
+print(result.mediaType)
+```
+
+The shared options are `voice`, `instructions`, `speed`, `outputFormat`,
+`providerOptions`, and `maxRetries`. Voice IDs and supported formats come from
+the provider.
+
+```swift
+let result = try await generateSpeech(
+  model: SarvamSpeechModel(targetLanguage: "hi-IN"),
+  text: "नमस्ते, आप कैसे हैं?",
+  voice: "anushka",
+  speed: 1.1
+)
+```
+
+## Models
+
+| Provider | Model type | Default or example model | Key |
+| --- | --- | --- | --- |
+| [OpenAI](/docs/providers/openai) | `OpenAISpeechModel` | `gpt-4o-mini-tts` | `OPENAI_API_KEY` |
+| [ElevenLabs](/docs/providers/elevenlabs) | `ElevenLabsSpeechModel` | `eleven_v3` | `ELEVENLABS_API_KEY` |
+| [LMNT](/docs/providers/lmnt) | `LMNTSpeechModel` | `blizzard` | `LMNT_API_KEY` |
+| [Hume](/docs/providers/hume) | `HumeSpeechModel` | Voice-selected; no model parameter | `HUME_API_KEY` |
+| [Deepgram](/docs/providers/deepgram) | `DeepgramSpeechModel` | `aura-2-thalia-en` | `DEEPGRAM_API_KEY` |
+| [Sarvam](/docs/providers/sarvam) | `SarvamSpeechModel` | `bulbul:v3` | `SARVAM_API_KEY` |

@@ -1,0 +1,121 @@
+---
+title: Generate images and video
+description: Create a still, edit it, animate it, and persist the generated media.
+---
+
+Covers `Examples/Features/12-ImageGeneration.swift`,
+`14-VideoGeneration.swift`, and `23-WorkflowGuides.swift`. You end up with a
+small asset pipeline that turns one prompt into a still image and an animated
+clip.
+
+<Steps>
+<Step>
+### Generate the still
+
+```swift
+let image = try await generateImage(
+  model: OpenAIImageModel("gpt-image-2"),
+  prompt: "A paper boat drifting down a rainy street, cinematic",
+  size: "1024x1024"
+)
+
+let imageURL = outputDirectory.appendingPathComponent("paper-boat.png")
+try image.image.write(to: imageURL)
+```
+
+`image.image` is the first result. Use `image.images` when requesting multiple
+variants.
+</Step>
+
+<Step>
+### Edit an existing image
+
+Passing source images through `generateImage` switches providers that support
+editing, such as OpenAI, to their edit flow:
+
+```swift
+let edited = try await generateImage(
+  model: OpenAIImageModel("gpt-image-2"),
+  prompt: "Make the scene nighttime and add warm window light",
+  images: [ImageContent(data: image.image, mediaType: "image/png")]
+)
+```
+</Step>
+
+<Step>
+### Animate the still
+
+```swift
+let video = try await generateVideo(
+  model: XaiVideoModel("grok-imagine-video-1.5"),
+  prompt: "The boat drifts forward while rain ripples across the street",
+  image: ImageContent(data: image.image, mediaType: "image/png"),
+  aspectRatio: "16:9",
+  duration: 6
+)
+```
+
+Video providers render asynchronously. Their model types handle job polling,
+so this call returns only when the provider reports a completed clip or an
+error.
+</Step>
+
+<Step>
+### Handle inline bytes and URLs
+
+Providers may return either form:
+
+```swift
+if let bytes = video.video {
+  try bytes.write(to: outputDirectory.appendingPathComponent("paper-boat.mp4"))
+} else if let remoteURL = video.urls.first {
+  print("ready at", remoteURL)
+}
+```
+
+Copy remote media into storage you control if provider URLs are temporary.
+Avoid holding large generated files in memory longer than necessary.
+</Step>
+
+<Step>
+### Swap media providers
+
+The workflow functions stay unchanged when the model changes:
+
+```swift
+let stillModel: any ImageModel = FalImageModel("fal-ai/flux/schnell")
+let videoModel: any VideoModel = LumaVideoModel("ray-2")
+```
+
+Size, aspect ratio, duration, and provider-native options still depend on the
+selected model.
+</Step>
+</Steps>
+
+## Final code
+
+```swift title="MediaPipeline.swift"
+import AI
+import Foundation
+
+func createClip(in outputDirectory: URL) async throws -> GenerateVideoResult {
+  let image = try await generateImage(
+    model: OpenAIImageModel("gpt-image-2"),
+    prompt: "A paper boat drifting down a rainy street, cinematic",
+    size: "1024x1024"
+  )
+  let imageURL = outputDirectory.appendingPathComponent("paper-boat.png")
+  try image.image.write(to: imageURL)
+
+  return try await generateVideo(
+    model: XaiVideoModel("grok-imagine-video-1.5"),
+    prompt: "The boat drifts forward while rain ripples across the street",
+    image: ImageContent(data: image.image, mediaType: "image/png"),
+    aspectRatio: "16:9",
+    duration: 6
+  )
+}
+```
+
+See [Image generation](/docs/image-generation) and
+[Video generation](/docs/video-generation) for every provider and option.

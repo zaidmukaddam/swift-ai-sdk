@@ -13,7 +13,7 @@ public struct LMNTSpeechModel: SpeechModel {
     private let urlSession: URLSession
 
     public init(
-        _ modelID: String = "aurora",
+        _ modelID: String = "blizzard",
         apiKey: String? = nil,
         baseURL: URL = URL(string: "https://api.lmnt.com")!,
         headers: [String: String] = [:],

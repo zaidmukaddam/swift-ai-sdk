@@ -38,8 +38,11 @@ func pickModel() -> (any AI.LanguageModel)? {
     }
     if let ollamaModel = env["OLLAMA_MODEL"] ?? override {
         let host = env["OLLAMA_HOST"] ?? "http://localhost:11434"
-        return OpenAICompatibleProvider
-            .ollama(baseURL: URL(string: host)!.appendingPathComponent("v1"))(ollamaModel)
+        guard let baseURL = URL(string: host) else {
+            print("Invalid OLLAMA_HOST: \(host)")
+            return nil
+        }
+        return OllamaModel(ollamaModel, baseURL: baseURL.appendingPathComponent("v1"))
     }
     return nil
 }

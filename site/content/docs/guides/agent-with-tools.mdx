@@ -3,7 +3,7 @@ title: An agent with tools
 description: Give the model functions, bound the loop, delegate to subagents.
 ---
 
-Covers `Examples/05-Tools.swift`, `10-Agent.swift`, and
+Covers `Examples/Features/05-Tools.swift`, `10-Agent.swift`, and
 `20-SubagentsAndContext.swift`. You end up with a reusable agent that
 calls your code and knows when to stop.
 
@@ -39,9 +39,17 @@ let weather = Tool.typed(
                "properties": ["city": ["type": "string"]],
                "required": ["city"]]
 ) { (args: WeatherArgs) in
-  ["tempC": 31, "city": .string(args.city)]
+  try await OpenMeteoWeather.current(city: args.city)
 }
 ```
+
+`OpenMeteoWeather.current` first resolves the city with Open-Meteo's
+geocoding endpoint, then requests current temperature, apparent temperature,
+humidity, weather code, and wind speed. The complete, compile-checked client
+is in `Examples/Support.swift`; Open-Meteo requires no API key for this use.
+The structured result includes `source` and `sourceURL` so your UI can retain
+the required attribution. See the official [forecast](https://open-meteo.com/en/docs)
+and [geocoding](https://open-meteo.com/en/docs/geocoding-api) documentation.
 </Step>
 
 <Step>
@@ -155,7 +163,7 @@ let weather = Tool.typed(
                "properties": ["city": ["type": "string"]],
                "required": ["city"]]
 ) { (args: WeatherArgs) in
-  ["tempC": 31, "city": .string(args.city)]
+  try await OpenMeteoWeather.current(city: args.city)
 }
 
 let assistant = Agent(

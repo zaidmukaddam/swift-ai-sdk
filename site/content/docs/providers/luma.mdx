@@ -1,0 +1,62 @@
+---
+title: Luma
+description: Image and video generation through Dream Machine.
+---
+
+One `LUMA_API_KEY` powers both Luma model types.
+
+## Images
+
+```swift
+let result = try await generateImage(
+  model: LumaImageModel(), // photon-1
+  prompt: "Editorial product photography on red paper",
+  aspectRatio: "4:3"
+)
+```
+
+`LumaImageModel` defaults to `photon-1`. It submits the generation, polls until
+completion, downloads the image, and returns it as `Data`.
+
+### Image models
+
+| Model ID | Use |
+| --- | --- |
+| `photon-1` | Highest-quality Photon model |
+| `photon-flash-1` | Faster Photon generation |
+
+## Video
+
+```swift
+let result = try await generateVideo(
+  model: LumaVideoModel(), // ray-2
+  prompt: "A tram crossing a rainy neon street",
+  aspectRatio: "16:9",
+  duration: 5
+)
+```
+
+`LumaVideoModel` defaults to `ray-2` and returns the completed asset in
+`result.urls`. To animate a still, pass a remotely accessible image URL:
+
+### Video models
+
+| Model ID | Use |
+| --- | --- |
+| `ray-2` | Highest-quality Ray model |
+| `ray-flash-2` | Faster Ray generation |
+
+```swift
+let result = try await generateVideo(
+  model: LumaVideoModel(),
+  prompt: "Slow camera push-in",
+  image: ImageContent(url: imageURL)
+)
+```
+
+Both models use `https://api.lumalabs.ai` and accept `pollInterval` and
+`pollTimeout` initializer arguments. See [image generation](/docs/image-generation)
+and [video generation](/docs/video-generation) for the shared APIs. These are
+the model IDs accepted by the Dream Machine endpoints used by this SDK; verify
+them in Luma's [image](https://docs.lumalabs.ai/docs/image-generation) and
+[video](https://docs.lumalabs.ai/docs/video-generation) API documentation.

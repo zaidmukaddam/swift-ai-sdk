@@ -116,7 +116,7 @@ Some open models (on Ollama or Groq) emit thinking inline rather than as structu
 
 ```swift
 let model = wrapLanguageModel(
-    model: OpenAICompatibleProvider.ollama()("deepseek-r1"),
+    model: OllamaModel("deepseek-r1"),
     middleware: [.extractReasoning(tag: "think")]
 )
 ```

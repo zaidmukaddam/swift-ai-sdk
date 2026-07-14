@@ -1,0 +1,40 @@
+---
+title: fal
+description: Image generation through fal models.
+---
+
+`FalImageModel` conforms to `ImageModel`, so it works with
+[`generateImage`](/docs/image-generation).
+
+```swift
+let result = try await generateImage(
+  model: FalImageModel("fal-ai/bytedance/seedream/v4.5/text-to-image"),
+  prompt: "A tiny observatory on a snowy mountain",
+  aspectRatio: "16:9"
+)
+```
+
+The model reads `FAL_API_KEY`, falling back to `FAL_KEY`, and uses
+`https://fal.run` by default. Pass any fal image model ID as the first
+initializer argument.
+
+`n`, `size`, `aspectRatio`, and `seed` map to fal request fields. Additional
+fal fields go under the `fal` provider key:
+
+```swift
+providerOptions: ["fal": ["num_inference_steps": 4]]
+```
+
+## Models
+
+Current image examples include:
+
+| Model ID | Use |
+| --- | --- |
+| `fal-ai/bytedance/seedream/v4.5/text-to-image` | Current general image generation |
+| `fal-ai/hunyuan-image/v3/text-to-image` | Hunyuan Image 3 |
+| `fal-ai/flux/schnell` | Fast FLUX generation |
+
+fal's catalog is dynamic. Copy the endpoint ID from the live
+[fal model gallery](https://fal.ai/models); `FalImageModel` accepts any image
+endpoint with the standard fal response shape.

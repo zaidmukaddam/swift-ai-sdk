@@ -1,0 +1,29 @@
+---
+title: LM Studio
+description: Connect Swift apps to models served locally by LM Studio.
+---
+
+`LMStudioModel` defaults to `http://localhost:1234/v1` and needs no key.
+
+```swift
+let model = LMStudioModel("openai/gpt-oss-20b")
+let result = try await generateText(model: model, prompt: "Say hello.")
+print(result.text)
+```
+
+Override `baseURL:` when the server uses another host or port. You can also
+pass custom `headers:` or a test `urlSession:`. On iOS, enable
+`NSAllowsLocalNetworking` to reach a server running on your Mac.
+
+## Models
+
+Model IDs come from the models downloaded in your LM Studio instance, so
+there is no universal static list. `openai/gpt-oss-20b` is the current
+official quickstart example. Inspect your actual IDs with:
+
+```bash
+curl http://localhost:1234/v1/models
+```
+
+See LM Studio's [OpenAI-compatible models endpoint](https://lmstudio.ai/docs/developer/openai-compat/models)
+for the response format.

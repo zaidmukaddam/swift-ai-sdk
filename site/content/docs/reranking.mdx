@@ -1,0 +1,32 @@
+---
+title: Reranking
+description: Reorder candidate documents by relevance with a reranking model.
+icon: Table
+---
+
+A reranker scores an existing candidate set against one query. Unlike vector
+search, it does not require you to generate or store embeddings.
+
+```swift
+let result = try await rerank(
+  model: CohereRerankingModel("rerank-v4-fast"),
+  query: "warm places in january",
+  documents: candidates,
+  topN: 5
+)
+
+for item in result.rankedDocuments {
+  print(item.relevanceScore, item.document)
+}
+```
+
+Each result includes `document`, `relevanceScore`, and `index`, which points
+back to the document's position in the original array. An empty document list
+returns an empty result.
+
+The built-in reranker is `CohereRerankingModel`; it reads
+`COHERE_API_KEY`. See the [Cohere provider page](/docs/providers/cohere) for
+its chat, embedding, and reranking model types.
+
+For vector generation and local similarity scoring, see
+[embeddings](/docs/embeddings).
