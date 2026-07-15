@@ -20,6 +20,20 @@ final class MCPAndTelemetryTests: XCTestCase {
         )
     }
 
+    func testSSEResponseHandlesCRLFLineEndings() throws {
+        let sse = "event: message\r\ndata: {\"jsonrpc\":\"2.0\",\"id\":7,\"result\":{\"tools\":[{\"name\":\"search\"}]}}\r\n\r\n"
+        let response = try MCPHTTPTransport.responseFromSSE(Data(sse.utf8), id: 7)
+        XCTAssertEqual(
+            response["result"]?["tools"]?.arrayValue?.first?["name"], "search"
+        )
+    }
+
+    func testSSEResponseHandlesMultilineDataField() throws {
+        let sse = "data: {\"jsonrpc\":\"2.0\",\"id\":3,\r\ndata: \"result\":{\"ok\":true}}\r\n\r\n"
+        let response = try MCPHTTPTransport.responseFromSSE(Data(sse.utf8), id: 3)
+        XCTAssertEqual(response["result"]?["ok"]?.boolValue, true)
+    }
+
     func testMCPToolBridgesIntoToolProtocol() {
         let client = MCPClient(transport: MCPHTTPTransport(
             url: URL(string: "https://mcp.example.com/mcp")!

@@ -8,6 +8,8 @@ public struct GenerateTextResult: Sendable {
     public var sources: [Source]
     public var steps: [StepResult]
     public var messages: [Message]
+    public var providerMetadata: JSONValue?
+    public var experimentalOutput: JSONValue? = nil
     public var finishReason: FinishReason
     public var usage: Usage
 
@@ -41,6 +43,8 @@ public func generateText(
     onStepFinish: OnStepFinish? = nil,
     onFinish: (@Sendable (GenerateTextResult) async -> Void)? = nil,
     onError: (@Sendable (Error) async -> Void)? = nil,
+    repairToolCall: (@Sendable (ToolCall, [any AIToolProtocol]) async -> ToolCall?)? = nil,
+    output: JSONValue? = nil,
     maxRetries: Int = 2
 ) async throws -> GenerateTextResult {
     let parameters = GenerationParameters(
@@ -59,13 +63,14 @@ public func generateText(
         seed: seed,
         reasoning: reasoning,
         stopSequences: stopSequences,
-        responseFormat: .text,
+        responseFormat: output.map { .json(schema: $0, name: "output", description: nil) } ?? .text,
         providerOptions: providerOptions,
         stopConditions: stopWhen ?? [.stepCountIs(max(1, maxSteps))],
         toolOrder: toolOrder,
         prepareCall: prepareCall,
         prepareStep: prepareStep,
         onStepFinish: onStepFinish,
+        repairToolCall: repairToolCall,
         maxRetries: maxRetries
     )
 
@@ -86,7 +91,16 @@ public func generateText(
             }
         ) {
             let outcome = try await runGenerationLoop(parameters) { _ in }
-            return GenerateTextResult(outcome: outcome)
+            var built = GenerateTextResult(outcome: outcome)
+            if output != nil {
+                if let data = built.text.data(using: .utf8),
+                   let value = try? JSONDecoder().decode(JSONValue.self, from: data) {
+                    built.experimentalOutput = value
+                } else {
+                    built.experimentalOutput = PartialJSON.parse(built.text)
+                }
+            }
+            return built
         }
         await onFinish?(result)
         return result
@@ -107,6 +121,9 @@ extension GenerateTextResult {
             sources: outcome.steps.flatMap(\.sources),
             steps: outcome.steps,
             messages: outcome.messages,
+            providerMetadata: outcome.steps.compactMap(\.providerMetadata).reduce(nil) {
+                JSONValue.mergingMetadata($0, $1)
+            },
             finishReason: outcome.finishReason,
             usage: outcome.totalUsage
         )

@@ -20,10 +20,11 @@ matching request headers.
 - URL citations surface as `StreamPart.source` and source-url parts in
   chat UIs.
 - `usage.cachedInputTokens` reports prompt-cache hits.
-- Built-in Responses tools have typed builders under `OpenAIModel.Tools`
-  — `webSearch`, `webSearchPreview`, `fileSearch(vectorStoreIds:)`, and
-  `codeInterpreter`. Drop them in `tools:`; the calls and results stream
-  back as provider-executed parts and citations as `.source`:
+- Built-in Responses tools have typed builders under `OpenAIModel.Tools`:
+  `webSearch`, `webSearchPreview`, `fileSearch(vectorStoreIds:)`,
+  `codeInterpreter`, and `computerUse(displayWidth:displayHeight:environment:)`.
+  Drop them in `tools:`; the calls and results stream back as
+  provider-executed parts and citations as `.source`:
 
 ```swift
 let result = try await generateText(
@@ -34,9 +35,38 @@ let result = try await generateText(
 print(result.sources.map(\.url))
 ```
 
+  `code_interpreter`, `image_generation`, and `mcp` calls added through
+  `providerOptions` surface the same way — each as a provider-executed
+  `.toolCall` plus its `.toolResult`. A model refusal arrives as text and
+  finishes on `.contentFilter`.
+
+- Token logprobs (request them with `logprobs`/`top_logprobs` via
+  `providerOptions`) collect on `result.providerMetadata["openai"]["logprobs"]`,
+  on both the Responses and chat wires.
 - Other Responses knobs (`store`, `instructions`, `include`,
-  `previous_response_id`) pass through `providerOptions`, merged at the
-  top level.
+  `previous_response_id`, `max_turns`) pass through `providerOptions`,
+  merged at the top level (nested objects like `text` and `reasoning`
+  merge rather than clobber, so `text.verbosity` coexists with a
+  structured-output format).
+
+## Response lifecycle
+
+`store: true` and `background: true` responses are managed with
+`OpenAIResponsesClient`:
+
+```swift
+let client = OpenAIResponsesClient()
+let tokens = try await client.countInputTokens(
+  for: LanguageModelRequest(messages: [.user("How many tokens is this?")]),
+  modelID: "gpt-5.6-sol"
+)                                           // POST /v1/responses/input_tokens
+
+let response = try await client.retrieve("resp_123", include: ["reasoning.encrypted_content"])
+let items = try await client.listInputItems("resp_123", limit: 20)
+try await client.cancel("resp_123")         // background responses
+try await client.compact("resp_123")        // shrink stored context
+try await client.delete("resp_123")
+```
 
 ## Models
 

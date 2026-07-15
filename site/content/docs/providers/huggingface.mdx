@@ -1,0 +1,36 @@
+---
+title: Hugging Face
+description: Open models through the Hugging Face inference router.
+---
+
+`HuggingFaceModel` reads `HUGGINGFACE_API_KEY` and targets the
+OpenAI-compatible router at `https://router.huggingface.co/v1`.
+
+```swift
+let model = HuggingFaceModel("meta-llama/Llama-3.3-70B-Instruct")
+let result = try await generateText(model: model, prompt: "Say hello.")
+print(result.text)
+```
+
+`HuggingFaceModel` targets the router's OpenAI **Responses** endpoint
+(`/responses`), the same wire as `OpenAIModel`, and fans out to whichever
+inference provider serves the model. Tools, structured output, vision, and
+reasoning depend on the selected model. The router has no embeddings endpoint,
+so there's no HuggingFace embedding pack.
+
+## Models
+
+Popular router models as of July 2026:
+
+| Model ID |
+| --- |
+| `meta-llama/Llama-3.3-70B-Instruct` |
+| `Qwen/Qwen3-Coder-480B-A35B-Instruct` |
+| `Qwen/Qwen3-32B` |
+| `deepseek-ai/DeepSeek-V3.1` |
+| `deepseek-ai/DeepSeek-R1-0528` |
+| `google/gemma-3-27b-it` |
+
+The catalog is large and dynamic. Copy any model id from the
+[Hugging Face models](https://huggingface.co/models?inference_provider=all&sort=trending)
+that exposes chat-completions inference.

@@ -7,13 +7,65 @@ icon: History
 <Steps>
 
 <Step>
+### 0.2.0
+
+#### New providers
+
+- Chat: `MoonshotModel` (Kimi), `AlibabaModel` (Qwen, with native thinking,
+  `AlibabaEmbeddingModel`, and `AlibabaVideoModel` for Wan), and
+  `HuggingFaceModel` (the router's Responses endpoint).
+- Retrieval: `VoyageEmbeddingModel` and `VoyageRerankingModel`.
+- Voice: `CartesiaSpeechModel` and `CartesiaTranscriptionModel`.
+- Images: `BlackForestLabsImageModel` (FLUX), `ByteDanceImageModel` (Seedream),
+  `ProdiaImageModel`, and `QuiverAIImageModel` (prompt-to-SVG).
+- Video: `ByteDanceVideoModel` (Seedance) and `KlingVideoModel` (JWT-signed).
+
+#### Provider capabilities
+
+- xAI gained image, speech, and transcription packs, video `editVideo` /
+  `extendVideo`, deferred completions and response compaction, and the
+  `XaiFilesClient` / `XaiBatchClient` / `XaiCollectionsClient` REST clients.
+  Live Search (`SearchParameters`) is deprecated in favor of the
+  `web_search` / `x_search` tools.
+- OpenAI: computer use (`OpenAIModel.Tools.computerUse`) with the
+  `computer_call` / `computer_call_output` round-trip, hosted-tool calls and
+  refusals now surface on the Responses stream, and `OpenAIResponsesClient`
+  manages stored/background responses (retrieve, delete, cancel, compact,
+  input items, token counting).
+- Bedrock now signs with SigV4 when given IAM credentials (bearer-token auth
+  still works).
+- Groq server tools (`browserSearch`, `codeExecution`) for the compound models.
+- Google grounding chunks surface as `.source`; the full grounding metadata,
+  OpenAI logprobs, Anthropic cache-creation tokens, Bedrock guardrail traces,
+  and Perplexity images / related questions all collect on
+  `result.providerMetadata`.
+
+#### Core
+
+- `smoothStream` re-chunks a text stream by word or line for calmer UI.
+- `generateObjectArray` returns a typed array; `repairText` salvages
+  unparseable JSON; `output:` on `generateText` produces a structured object
+  alongside tool calls (`result.experimentalOutput`).
+- `repairToolCall` fixes a malformed tool call before it runs; tools can
+  return images through `Tool.modelOutput` (multimodal tool results).
+- New `streamText` callbacks `onChunk` and `onAbort`; `maxImagesPerCall`
+  batches image generation; a `.providerMetadata` channel runs through the
+  whole stream.
+
+#### Docs
+
+- Examples and guides for every new provider and feature, a computer-use and a
+  self-repair guide, and the agent skill refreshed to match.
+</Step>
+
+<Step>
 ### 0.1.1
 
 #### Providers
 
 - First-class model packs for AI Gateway, Baseten, Cerebras, DeepInfra,
-  Fireworks, LM Studio, Ollama, OpenRouter, Sarvam, Together AI, and Vercel —
-  dedicated types (`BasetenModel`, `CerebrasModel`, and so on) built on a
+  Fireworks, LM Studio, Ollama, OpenRouter, Sarvam, Together AI, and Vercel.
+  Dedicated types (`BasetenModel`, `CerebrasModel`, and so on) built on a
   shared OpenAI-compatible base, replacing the `OpenAICompatibleProvider`
   factory functions for these providers (still available, deprecated).
   `MistralModel`, `PerplexityModel`, `DeepSeekModel`, and `GroqModel` moved
@@ -59,7 +111,7 @@ The first release. A Swift port of the Vercel AI SDK for iOS and macOS.
   and client-side tools.
 - Subagents: any `Agent` becomes a tool via `asTool`.
 - Provider-defined (server-executed) tools with typed builders under
-  `<Model>.Tools` for xAI, OpenAI, Google, and Anthropic — web and X
+  `<Model>.Tools` for xAI, OpenAI, Google, and Anthropic: web and X
   search, code execution, file search, computer use, and more. Calls and
   results come back as provider-executed `.toolCall` / `.toolResult` parts,
   and Anthropic's required beta headers are added for you.
@@ -105,7 +157,7 @@ Native packs that speak each provider's own wire:
   `/api/chat` route: `ChatTransport`, `HTTPChatTransport`,
   `LocalChatTransport`, `readUIMessageStream`, message metadata, and stream
   resumption.
-- Realtime voice over WebSockets — OpenAI, Google (Gemini Live), and xAI —
+- Realtime voice over WebSockets (OpenAI, Google (Gemini Live), and xAI)
   through `RealtimeSession`.
 
 #### On-device

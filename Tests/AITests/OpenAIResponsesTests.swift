@@ -174,4 +174,81 @@ final class OpenAIResponsesTests: XCTestCase {
             "https://api.openai.com/v1/chat/completions"
         )
     }
+
+    func testComputerUseToolBuilder() {
+        let tool = OpenAIModel.Tools.computerUse(displayWidth: 1280, displayHeight: 800)
+        XCTAssertEqual(tool.args["type"], "computer_use_preview")
+        XCTAssertEqual(tool.args["display_width"]?.intValue, 1280)
+        XCTAssertEqual(tool.args["display_height"]?.intValue, 800)
+        XCTAssertEqual(tool.args["environment"], "browser")
+    }
+
+    func testComputerCallRoundTripInputItems() {
+        let messages: [Message] = [
+            .init(role: .assistant, content: [.toolCall(ToolCall(
+                id: "c1", name: "computer_use_preview",
+                arguments: .object(["action": .object([
+                    "type": .string("click"), "x": .number(10), "y": .number(20)
+                ])])
+            ))]),
+            .init(role: .tool, content: [.toolResult(ToolResult(
+                toolCallID: "c1", name: "computer_use_preview", output: .null,
+                content: [.image(ImageContent(data: Data([0x89, 0x50]), mediaType: "image/png"))]
+            ))])
+        ]
+        let items = OpenAIModel.inputItems(from: messages, systemRole: "system")
+        let call = items.first { $0["type"] == "computer_call" }
+        XCTAssertEqual(call?["call_id"], "c1")
+        XCTAssertEqual(call?["action"]?["type"], "click")
+        let output = items.first { $0["type"] == "computer_call_output" }
+        XCTAssertEqual(output?["call_id"], "c1")
+        XCTAssertEqual(output?["output"]?["type"], "computer_screenshot")
+        XCTAssertTrue(
+            output?["output"]?["image_url"]?.stringValue?.hasPrefix("data:image/png;base64,") ?? false
+        )
+    }
+
+    func testServerToolNameMapsHostedTools() {
+        XCTAssertEqual(OpenAIModel.serverToolName(for: "web_search_call"), "web_search")
+        XCTAssertEqual(OpenAIModel.serverToolName(for: "file_search_call"), "file_search")
+        XCTAssertEqual(OpenAIModel.serverToolName(for: "code_interpreter_call"), "code_interpreter")
+        XCTAssertEqual(OpenAIModel.serverToolName(for: "image_generation_call"), "image_generation")
+        XCTAssertEqual(OpenAIModel.serverToolName(for: "mcp_call"), "mcp")
+        XCTAssertNil(OpenAIModel.serverToolName(for: "function_call"))
+    }
+
+    func testServerToolPayloadForCodeInterpreter() {
+        let item: JSONValue = .object([
+            "code": .string("print(2+2)"),
+            "outputs": .array([.object(["type": .string("logs"), "logs": .string("4")])])
+        ])
+        let (input, result) = OpenAIModel.serverToolPayload("code_interpreter_call", item)
+        XCTAssertEqual(input["code"]?.stringValue, "print(2+2)")
+        XCTAssertEqual(result["outputs"]?.arrayValue?.first?["logs"]?.stringValue, "4")
+    }
+
+    func testServerToolPayloadForWebSearchMirrorsAction() {
+        let item: JSONValue = .object([
+            "action": .object(["type": .string("search"), "query": .string("swift")])
+        ])
+        let (input, result) = OpenAIModel.serverToolPayload("web_search_call", item)
+        XCTAssertEqual(input, result)
+        XCTAssertEqual(input["query"]?.stringValue, "swift")
+    }
+
+    func testServerToolPayloadForMcpPrefersErrorOverOutput() {
+        let ok: JSONValue = .object([
+            "name": .string("lookup"), "arguments": .string("{}"), "output": .string("done")
+        ])
+        let (okInput, okResult) = OpenAIModel.serverToolPayload("mcp_call", ok)
+        XCTAssertEqual(okInput["name"]?.stringValue, "lookup")
+        XCTAssertEqual(okResult["output"]?.stringValue, "done")
+
+        let failed: JSONValue = .object([
+            "name": .string("lookup"), "error": .string("boom"), "output": .null
+        ])
+        let (_, failResult) = OpenAIModel.serverToolPayload("mcp_call", failed)
+        XCTAssertEqual(failResult["error"]?.stringValue, "boom")
+        XCTAssertNil(failResult["output"])
+    }
 }

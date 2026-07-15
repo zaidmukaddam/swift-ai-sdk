@@ -89,6 +89,11 @@ public struct CohereModel: LanguageModel {
         if !request.stopSequences.isEmpty {
             body["stop_sequences"] = .array(request.stopSequences.map { .string($0) })
         }
+        if let thinking = thinkingField(
+            request.reasoning, maxOutputTokens: request.maxOutputTokens, modelID: modelID
+        ) {
+            body["thinking"] = thinking
+        }
         if case .jsonNoSchema = request.responseFormat {
             body["response_format"] = .object(["type": "json_object"])
         }
@@ -126,6 +131,26 @@ public struct CohereModel: LanguageModel {
             for (k, v) in opts { body[k] = v }
         }
         return .object(body)
+    }
+
+    static func thinkingField(
+        _ reasoning: ReasoningEffort, maxOutputTokens: Int, modelID: String
+    ) -> JSONValue? {
+        guard modelID.contains("reasoning") else { return nil }
+        switch reasoning {
+        case .providerDefault:
+            return nil
+        case .none:
+            return .object(["type": "disabled"])
+        default:
+            var thinking: [String: JSONValue] = ["type": "enabled"]
+            if let budget = reasoning.budget(
+                maxOutputTokens: maxOutputTokens, maxBudget: 31000, minBudget: 1024
+            ) {
+                thinking["token_budget"] = .number(Double(budget))
+            }
+            return .object(thinking)
+        }
     }
 
     static func mapMessages(_ messages: [Message]) -> [JSONValue] {

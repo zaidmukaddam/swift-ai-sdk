@@ -105,6 +105,9 @@ private struct ChunkBridge {
         case .source(let source):
             return [.sourceURL(sourceID: source.id, url: source.url, title: source.title)]
 
+        case .providerMetadata:
+            return []
+
         case .finishStep:
             var chunks = closeOpenParts()
             chunks.append(.finishStep)

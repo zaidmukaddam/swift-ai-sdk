@@ -3,17 +3,31 @@ import Foundation
 import FoundationNetworking
 #endif
 
+public protocol MCPTransport: Sendable {
+    func request(id: Int, method: String, params: JSONValue) async throws -> JSONValue
+    func notify(method: String) async throws
+    func close() async
+}
+
+public extension MCPTransport {
+    func close() async {}
+}
+
 public actor MCPClient {
-    public let transport: MCPHTTPTransport
+    public let transport: any MCPTransport
     private var initialized = false
     private var nextID = 1
 
-    public init(transport: MCPHTTPTransport) {
+    public init(transport: any MCPTransport) {
         self.transport = transport
     }
 
+    public func close() async {
+        await transport.close()
+    }
+
     public func connect(
-        clientName: String = "swift-ai-sdk", clientVersion: String = "0.1.1"
+        clientName: String = "swift-ai-sdk", clientVersion: String = "0.2.0"
     ) async throws {
         guard !initialized else { return }
         _ = try await request(method: "initialize", params: .object([
@@ -30,17 +44,23 @@ public actor MCPClient {
 
     public func tools() async throws -> [any AIToolProtocol] {
         try await connect()
-        let result = try await request(method: "tools/list", params: .object([:]))
-        let tools = result["tools"]?.arrayValue ?? []
-        return tools.compactMap { tool -> (any AIToolProtocol)? in
-            guard let name = tool["name"]?.stringValue else { return nil }
-            return MCPTool(
-                name: name,
-                description: tool["description"]?.stringValue ?? "",
-                parameters: tool["inputSchema"] ?? ["type": "object"],
-                client: self
-            )
-        }
+        var collected: [any AIToolProtocol] = []
+        var cursor: String?
+        repeat {
+            let params: JSONValue = cursor.map { .object(["cursor": .string($0)]) } ?? .object([:])
+            let result = try await request(method: "tools/list", params: params)
+            for tool in result["tools"]?.arrayValue ?? [] {
+                guard let name = tool["name"]?.stringValue else { continue }
+                collected.append(MCPTool(
+                    name: name,
+                    description: tool["description"]?.stringValue ?? "",
+                    parameters: tool["inputSchema"] ?? ["type": "object"],
+                    client: self
+                ))
+            }
+            cursor = result["nextCursor"]?.stringValue
+        } while cursor != nil
+        return collected
     }
 
     public func callTool(name: String, arguments: JSONValue) async throws -> JSONValue {
@@ -89,7 +109,7 @@ struct MCPTool: AIToolProtocol {
     }
 }
 
-public actor MCPHTTPTransport {
+public actor MCPHTTPTransport: MCPTransport {
     private let url: URL
     private let headers: [String: String]
     private let urlSession: URLSession
@@ -101,7 +121,7 @@ public actor MCPHTTPTransport {
         self.urlSession = urlSession
     }
 
-    func request(id: Int, method: String, params: JSONValue) async throws -> JSONValue {
+    public func request(id: Int, method: String, params: JSONValue) async throws -> JSONValue {
         let body: JSONValue = .object([
             "jsonrpc": "2.0",
             "id": .number(Double(id)),
@@ -126,7 +146,7 @@ public actor MCPHTTPTransport {
         return try JSONDecoder().decode(JSONValue.self, from: data)
     }
 
-    func notify(method: String) async throws {
+    public func notify(method: String) async throws {
         let body: JSONValue = .object([
             "jsonrpc": "2.0",
             "method": .string(method)
@@ -152,11 +172,17 @@ public actor MCPHTTPTransport {
     static func responseFromSSE(_ data: Data, id: Int) throws -> JSONValue {
         var parser = SSEParser()
         var events: [SSEEvent] = []
-        for line in String(decoding: data, as: UTF8.self).split(
-            separator: "\n", omittingEmptySubsequences: false
-        ) {
-            if let event = parser.feed(String(line)) { events.append(event) }
+        var lineBuffer: [UInt8] = []
+        func feedLine() {
+            if lineBuffer.last == 0x0D { lineBuffer.removeLast() }
+            let line = String(decoding: lineBuffer, as: UTF8.self)
+            lineBuffer.removeAll(keepingCapacity: true)
+            if let event = parser.feed(line) { events.append(event) }
         }
+        for byte in data {
+            if byte == 0x0A { feedLine() } else { lineBuffer.append(byte) }
+        }
+        if !lineBuffer.isEmpty { feedLine() }
         if let event = parser.flush() { events.append(event) }
 
         for event in events {

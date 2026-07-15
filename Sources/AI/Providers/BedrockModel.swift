@@ -2,12 +2,19 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
+#if canImport(CryptoKit)
+import CryptoKit
+#endif
 
 public struct BedrockModel: LanguageModel {
     public let provider = "bedrock"
     public let modelID: String
 
     private let apiKey: String
+    private let region: String
+    private let accessKeyID: String
+    private let secretAccessKey: String
+    private let sessionToken: String
     private let baseURL: URL
     private let headers: [String: String]
     private let urlSession: URLSession
@@ -16,15 +23,21 @@ public struct BedrockModel: LanguageModel {
         _ modelID: String,
         apiKey: String? = nil,
         region: String = "us-east-1",
+        accessKeyID: String? = nil,
+        secretAccessKey: String? = nil,
+        sessionToken: String? = nil,
         baseURL: URL? = nil,
         headers: [String: String] = [:],
         urlSession: URLSession = .shared
     ) {
         self.modelID = modelID
-        let resolvedKey = apiKey
-            ?? ProcessInfo.processInfo.environment["AWS_BEARER_TOKEN_BEDROCK"]
-            ?? ""
+        let env = ProcessInfo.processInfo.environment
+        let resolvedKey = apiKey ?? env["AWS_BEARER_TOKEN_BEDROCK"] ?? ""
         self.apiKey = resolvedKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.region = region
+        self.accessKeyID = accessKeyID ?? env["AWS_ACCESS_KEY_ID"] ?? ""
+        self.secretAccessKey = secretAccessKey ?? env["AWS_SECRET_ACCESS_KEY"] ?? ""
+        self.sessionToken = sessionToken ?? env["AWS_SESSION_TOKEN"] ?? ""
         self.baseURL = baseURL
             ?? URL(string: "https://bedrock-runtime.\(region).amazonaws.com")
             ?? URL(string: "https://bedrock-runtime.us-east-1.amazonaws.com")!
@@ -127,6 +140,14 @@ public struct BedrockModel: LanguageModel {
                                     cachedInputTokens: u["cacheReadInputTokens"]?.intValue
                                 )
                             }
+                            var bedrock: [String: JSONValue] = [:]
+                            if let trace = payload["trace"] { bedrock["trace"] = trace }
+                            if let cacheWrite = payload["usage"]?["cacheWriteInputTokens"] {
+                                bedrock["cacheWriteInputTokens"] = cacheWrite
+                            }
+                            if !bedrock.isEmpty {
+                                continuation.yield(.providerMetadata(.object(["bedrock": .object(bedrock)])))
+                            }
 
                         case "internalServerException", "modelStreamErrorException",
                              "throttlingException", "validationException":
@@ -164,16 +185,85 @@ public struct BedrockModel: LanguageModel {
 
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = "POST"
-        if !apiKey.isEmpty {
-            urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        }
         urlRequest.setValue("application/json", forHTTPHeaderField: "content-type")
         for (field, value) in headers {
             urlRequest.setValue(value, forHTTPHeaderField: field)
         }
-        urlRequest.httpBody = try JSONEncoder().encode(Self.requestBody(for: request, modelID: modelID))
+        let body = try JSONEncoder().encode(Self.requestBody(for: request, modelID: modelID))
+        urlRequest.httpBody = body
+
+        if !accessKeyID.isEmpty && !secretAccessKey.isEmpty {
+            try signSigV4(&urlRequest, url: url, body: body)
+        } else if !apiKey.isEmpty {
+            urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
         return urlRequest
     }
+
+    func signSigV4(_ urlRequest: inout URLRequest, url: URL, body: Data) throws {
+        #if canImport(CryptoKit)
+        guard let host = url.host else {
+            throw AIError.invalidRequest("Bedrock URL has no host to sign")
+        }
+        let amzFormatter = DateFormatter()
+        amzFormatter.locale = Locale(identifier: "en_US_POSIX")
+        amzFormatter.timeZone = TimeZone(identifier: "UTC")
+        amzFormatter.dateFormat = "yyyyMMdd'T'HHmmss'Z'"
+        let amzDate = amzFormatter.string(from: Date())
+        let dateStamp = String(amzDate.prefix(8))
+
+        let canonicalURI = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .percentEncodedPath ?? url.path
+        let payloadHash = Self.sha256Hex(body)
+
+        var canonicalHeaders = "content-type:application/json\n"
+        canonicalHeaders += "host:\(host)\n"
+        canonicalHeaders += "x-amz-date:\(amzDate)\n"
+        var signedHeaders = "content-type;host;x-amz-date"
+        if !sessionToken.isEmpty {
+            canonicalHeaders += "x-amz-security-token:\(sessionToken)\n"
+            signedHeaders += ";x-amz-security-token"
+        }
+
+        let canonicalRequest = [
+            "POST", canonicalURI, "", canonicalHeaders, signedHeaders, payloadHash
+        ].joined(separator: "\n")
+
+        let scope = "\(dateStamp)/\(region)/bedrock/aws4_request"
+        let stringToSign = [
+            "AWS4-HMAC-SHA256", amzDate, scope, Self.sha256Hex(Data(canonicalRequest.utf8))
+        ].joined(separator: "\n")
+
+        var signingKey = Data("AWS4\(secretAccessKey)".utf8)
+        for part in [dateStamp, region, "bedrock", "aws4_request"] {
+            signingKey = Self.hmac(signingKey, part)
+        }
+        let signature = Self.hmac(signingKey, stringToSign)
+            .map { String(format: "%02x", $0) }.joined()
+
+        urlRequest.setValue(amzDate, forHTTPHeaderField: "X-Amz-Date")
+        if !sessionToken.isEmpty {
+            urlRequest.setValue(sessionToken, forHTTPHeaderField: "X-Amz-Security-Token")
+        }
+        urlRequest.setValue(
+            "AWS4-HMAC-SHA256 Credential=\(accessKeyID)/\(scope), "
+                + "SignedHeaders=\(signedHeaders), Signature=\(signature)",
+            forHTTPHeaderField: "Authorization"
+        )
+        #else
+        throw AIError.invalidRequest("Bedrock SigV4 signing requires CryptoKit")
+        #endif
+    }
+
+    #if canImport(CryptoKit)
+    static func sha256Hex(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    static func hmac(_ key: Data, _ message: String) -> Data {
+        Data(HMAC<SHA256>.authenticationCode(for: Data(message.utf8), using: SymmetricKey(data: key)))
+    }
+    #endif
 
     private static let modelIDAllowed = CharacterSet(
         charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()"

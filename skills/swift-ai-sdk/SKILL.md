@@ -3,11 +3,12 @@ name: swift-ai-sdk
 description: >
   Build AI features in Swift for iOS and macOS with swift-ai-sdk — streaming text,
   structured output, tools, agents, embeddings, speech, transcription, images, video,
-  realtime voice, and Apple's on-device models, across every provider (OpenAI, Anthropic,
-  Google, xAI, Bedrock, Groq, Mistral, DeepSeek, Perplexity, Cohere, Sarvam, Ollama). Use
-  when writing Swift that calls generateText / streamText / generateObject, builds an Agent
-  or tool loop, wires a ChatSession into SwiftUI, or adds realtime voice. Activate for
-  swift-ai-sdk work even when it isn't named.
+  realtime voice, computer use, and Apple's on-device models, across every provider (OpenAI,
+  Anthropic, Google, xAI, Bedrock, Groq, Mistral, DeepSeek, Perplexity, Cohere, Voyage,
+  Moonshot, Alibaba, HuggingFace, Cartesia, Sarvam, Ollama, and more). Use when writing Swift
+  that calls generateText / streamText / generateObject, builds an Agent or tool loop, wires a
+  ChatSession into SwiftUI, or adds realtime voice. Activate for swift-ai-sdk work even when it
+  isn't named.
 ---
 
 # swift-ai-sdk
@@ -19,7 +20,7 @@ model and nothing else in your code moves.
 
 ```swift
 // Package.swift
-.package(url: "https://github.com/zaidmukaddam/swift-ai-sdk.git", from: "0.1.1")
+.package(url: "https://github.com/zaidmukaddam/swift-ai-sdk.git", from: "0.2.0")
 ```
 
 Add `"AI"` to your target's dependencies (and `"AITesting"` to test targets). Requires

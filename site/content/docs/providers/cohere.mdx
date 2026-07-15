@@ -13,7 +13,12 @@ Key from `COHERE_API_KEY`; base URL `https://api.cohere.com/v2`.
 
 - Tools, structured output, and vision on the native v2 chat wire.
 - Citations surface as `StreamPart.source`.
-- No reasoning knob — the `reasoning` parameter is ignored.
+- `command-a-reasoning-08-2025` is a hybrid reasoning model; thinking streams
+  as `.reasoningDelta`. The `reasoning` parameter maps to Cohere's `thinking`
+  field on reasoning models (ids containing `reasoning`) and is ignored on the
+  others: `.none` disables thinking, an effort level enables it with a
+  `token_budget` scaled from `maxOutputTokens` (capped at 31k), and
+  `.providerDefault` leaves the model's default (thinking on) untouched.
 
 ## Embeddings and reranking
 
@@ -39,7 +44,18 @@ ranked.rankedDocuments.first?.relevanceScore
 
 ## Models
 
-As of July 2026: `command-a` (also served date-stamped as
-`command-a-03-2025`) for chat, `embed-v4.0` for embeddings, and
-`rerank-v4-pro` / `rerank-v4-fast` (December 2025) or the older
-`rerank-v3.5` for the reranker.
+As of July 2026:
+
+| Model | Notes |
+| --- | --- |
+| `command-a` / `command-a-03-2025` | General chat |
+| `command-a-plus` / `command-a-plus-05-2026` | Multimodal MoE flagship (vision + text) |
+| `command-a-reasoning-08-2025` | Reasoning; thinking maps from `reasoning` (above) |
+| `command-a-vision-07-2025` | Vision — up to 20 images, 128K context; no tool calling |
+| `command-a-translate-08-2025` | Translation across 23 languages |
+| `north-mini-code-1.0` | Code |
+| `embed-v4.0` | Embeddings (`CohereEmbeddingModel`) |
+| `rerank-v4-pro` / `rerank-v4-fast` / `rerank-v3.5` | Rerank (`CohereRerankingModel`) |
+
+The chat, reasoning, vision, and translation models share the v2 chat wire, so
+any of them drops into `CohereModel("…")`.

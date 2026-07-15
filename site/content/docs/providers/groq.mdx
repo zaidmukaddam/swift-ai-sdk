@@ -22,6 +22,20 @@ Key from `GROQ_API_KEY`; base URL `https://api.groq.com/openai/v1`.
   reasoning pair well with the
   [extractReasoning middleware](/docs/advanced#middleware).
 
+## Server tools
+
+The `groq/compound` models run tools for you. Pass the typed builders
+under `GroqModel.Tools` in `tools:` — they serialize to Groq's
+`{"type": "browser_search"}` / `{"type": "code_execution"}` entries:
+
+```swift
+let result = try await generateText(
+  model: GroqModel("groq/compound"),
+  prompt: "What shipped in Swift this week? Run any code you need.",
+  tools: [GroqModel.Tools.browserSearch(), GroqModel.Tools.codeExecution()]
+)
+```
+
 ## Models
 
 Groq hosts open models rather than training its own line. The catalog

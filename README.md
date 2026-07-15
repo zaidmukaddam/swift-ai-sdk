@@ -272,7 +272,7 @@ The transport layer is pinned against the AI SDK v5+ UI message stream protocol,
 ## Install
 
 ```swift
-.package(url: "https://github.com/zaidmukaddam/swift-ai-sdk.git", from: "0.1.1")
+.package(url: "https://github.com/zaidmukaddam/swift-ai-sdk.git", from: "0.2.0")
 ```
 
 Then add `"AI"` to your target's dependencies. Requires Swift 6 / Xcode 16+. The Foundation Models provider activates automatically when built with the iOS 26 / macOS 26 SDK.

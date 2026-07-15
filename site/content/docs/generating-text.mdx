@@ -159,3 +159,14 @@ providerOptions: [
   "thinking": ["type": "enabled", "budget_tokens": 12000]
 ]
 ```
+
+## Smoothing, callbacks, and structured output
+
+- **`smoothStream`** re-chunks a `textStream` by word or line with an optional
+  delay, for calmer UI streaming: `for try await c in result.smoothedTextStream() { … }`.
+- **`onChunk`** fires per streamed part and **`onAbort`** on cancellation,
+  alongside the existing `onStepFinish` / `onFinish` / `onError`.
+- **`output:`** on `generateText` produces a final structured object *alongside*
+  tool calls — read it from `result.experimentalOutput`.
+- **`repairToolCall`** ([tools](/docs/tools#repairing-tool-calls)) fixes a
+  malformed tool call before it runs.

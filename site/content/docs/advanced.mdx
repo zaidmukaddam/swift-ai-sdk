@@ -59,22 +59,9 @@ Middlewares apply in array order.
 
 ## MCP tools
 
-`MCPClient` speaks Streamable HTTP (JSON-RPC over POST, SSE responses,
-session ids) and bridges server tools straight into the loop:
-
-```swift
-let mcp = MCPClient(transport: MCPHTTPTransport(url: serverURL))
-try await mcp.connect()
-
-let result = try await generateText(
-  model: model,
-  prompt: "What is in my calendar today?",
-  tools: try await mcp.tools()
-)
-```
-
-Bridged tools validate arguments against the server's schemas and return
-results into the same loop as local tools.
+Model Context Protocol servers are covered on their own page. See
+[MCP](/docs/mcp) for `MCPClient`, the HTTP, stdio, and legacy SSE transports,
+pagination, and rug-pull detection.
 
 ## File and skill uploads
 

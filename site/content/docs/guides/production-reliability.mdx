@@ -178,5 +178,9 @@ func reliableAnswer(_ prompt: String) async throws -> String {
 }
 ```
 
+Retries re-run the whole call; to salvage a *single* bad response — a
+misspelled tool name or fenced JSON — reach for the repair callbacks in
+[Recover from bad model output](/docs/guides/self-repair).
+
 See [Advanced](/docs/advanced) for custom middleware, persistent cache
 adapters, all telemetry spans, and the complete error list.

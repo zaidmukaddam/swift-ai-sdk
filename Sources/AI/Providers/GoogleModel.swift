@@ -52,6 +52,8 @@ public struct GoogleModel: LanguageModel {
                 var hadToolCalls = false
                 var finishReason: String?
                 var usage: GoogleChunk.UsageMetadata?
+                var sourceCount = 0
+                var seenSources = Set<String>()
 
                 do {
                     for try await sse in SSE.events(from: bytes) {
@@ -60,8 +62,27 @@ public struct GoogleModel: LanguageModel {
                         else { continue }
 
                         if let meta = chunk.usageMetadata { usage = meta }
+                        if let rawCandidate = (try? JSONDecoder().decode(JSONValue.self, from: data))?["candidates"]?.arrayValue?.first {
+                            var google: [String: JSONValue] = [:]
+                            if let grounding = rawCandidate["groundingMetadata"] { google["groundingMetadata"] = grounding }
+                            if let safety = rawCandidate["safetyRatings"] { google["safetyRatings"] = safety }
+                            if let urlContext = rawCandidate["urlContextMetadata"] { google["urlContextMetadata"] = urlContext }
+                            if !google.isEmpty {
+                                continuation.yield(.providerMetadata(.object(["google": .object(google)])))
+                            }
+                        }
                         for candidate in chunk.candidates ?? [] {
                             if let reason = candidate.finishReason { finishReason = reason }
+                            for gchunk in candidate.groundingMetadata?.groundingChunks ?? [] {
+                                guard let uri = gchunk.web?.uri, seenSources.insert(uri).inserted
+                                else { continue }
+                                continuation.yield(.source(Source(
+                                    id: "source-\(sourceCount)",
+                                    url: uri,
+                                    title: gchunk.web?.title
+                                )))
+                                sourceCount += 1
+                            }
                             for part in candidate.content?.parts ?? [] {
                                 if part.thought == true, let text = part.text {
                                     continuation.yield(.reasoningDelta(text))
@@ -211,17 +232,26 @@ public struct GoogleModel: LanguageModel {
             case .xhigh: level = "high"
             default: level = reasoning.rawValue
             }
-            return .object(["thinkingLevel": .string(level)])
+            return .object([
+                "thinkingLevel": .string(level),
+                "includeThoughts": .bool(reasoning != .none)
+            ])
         }
         if reasoning == .none {
-            return .object(["thinkingBudget": .number(0)])
+            return .object([
+                "thinkingBudget": .number(0),
+                "includeThoughts": .bool(false)
+            ])
         }
         let maxBudget = id.contains("2.5-pro") || id.contains("gemini-3-pro-image")
             ? 32768 : 24576
         guard let budget = reasoning.budget(
             maxOutputTokens: 65536, maxBudget: maxBudget, minBudget: 0
         ) else { return nil }
-        return .object(["thinkingBudget": .number(Double(budget))])
+        return .object([
+            "thinkingBudget": .number(Double(budget)),
+            "includeThoughts": .bool(true)
+        ])
     }
 
     private static func systemInstruction(_ messages: [Message]) -> JSONValue? {
@@ -399,6 +429,17 @@ private struct GoogleChunk: Decodable {
     struct Candidate: Decodable {
         var content: Content?
         var finishReason: String?
+        var groundingMetadata: GroundingMetadata?
+    }
+    struct GroundingMetadata: Decodable {
+        var groundingChunks: [GroundingChunk]?
+    }
+    struct GroundingChunk: Decodable {
+        var web: GroundingChunkWeb?
+    }
+    struct GroundingChunkWeb: Decodable {
+        var uri: String?
+        var title: String?
     }
     struct Content: Decodable {
         var parts: [Part]?

@@ -85,14 +85,20 @@ final class ReasoningTests: XCTestCase {
         )
     }
 
-    func testGroqMapsAndOmitsNone() {
+    func testGroqMapsEffortSendsNoneAndFormat() {
         XCTAssertEqual(
             chatBody(.xhigh, style: .groq)["reasoning_effort"]?.stringValue, "high"
         )
         XCTAssertEqual(
             chatBody(.minimal, style: .groq)["reasoning_effort"]?.stringValue, "low"
         )
-        XCTAssertNil(chatBody(.none, style: .groq)["reasoning_effort"])
+        XCTAssertEqual(
+            chatBody(.none, style: .groq)["reasoning_effort"]?.stringValue, "none"
+        )
+        XCTAssertEqual(
+            chatBody(.high, style: .groq)["reasoning_format"]?.stringValue, "parsed"
+        )
+        XCTAssertNil(chatBody(.providerDefault, style: .groq)["reasoning_effort"])
     }
 
     func testXaiChatSendsNoneAndSkipsFixedReasoningModels() {
@@ -138,6 +144,78 @@ final class ReasoningTests: XCTestCase {
         XCTAssertNil(
             chatBody(.high, style: .mistral, modelID: "mistral-large-latest")["reasoning_effort"]
         )
+    }
+
+    func testProviderMetadataAccumulatesOnResult() async throws {
+        let model = MockLanguageModel(parts: [
+            .textDelta("hi"),
+            .providerMetadata(.object([
+                "perplexity": .object([
+                    "images": .array([.string("https://ex.com/a.jpg")]),
+                    "related_questions": .array([.string("What next?")])
+                ])
+            ])),
+            .finish(reason: .stop, usage: Usage())
+        ])
+        let result = try await generateText(model: model, prompt: "hi")
+        let perplexity = result.providerMetadata?["perplexity"]
+        XCTAssertEqual(perplexity?["images"]?.arrayValue?.first?.stringValue, "https://ex.com/a.jpg")
+        XCTAssertEqual(
+            perplexity?["related_questions"]?.arrayValue?.first?.stringValue, "What next?"
+        )
+    }
+
+    func testProviderMetadataNilWhenAbsent() async throws {
+        let model = MockLanguageModel(text: "hi")
+        let result = try await generateText(model: model, prompt: "hi")
+        XCTAssertNil(result.providerMetadata)
+    }
+
+    func testAlibabaMapsReasoningToThinkingBudget() {
+        XCTAssertEqual(chatBody(.high, style: .alibaba)["enable_thinking"]?.boolValue, true)
+        XCTAssertEqual(chatBody(.high, style: .alibaba)["thinking_budget"]?.intValue, 38912)
+        XCTAssertEqual(chatBody(.low, style: .alibaba)["thinking_budget"]?.intValue, 4096)
+        XCTAssertEqual(chatBody(.none, style: .alibaba)["enable_thinking"]?.boolValue, false)
+        XCTAssertNil(chatBody(.none, style: .alibaba)["thinking_budget"])
+        XCTAssertNil(chatBody(.providerDefault, style: .alibaba)["enable_thinking"])
+    }
+
+    func testTokenLimitKeyMatchesWire() {
+        XCTAssertEqual(chatBody(.high, style: .openAI)["max_completion_tokens"]?.intValue, 1024)
+        XCTAssertNil(chatBody(.high, style: .openAI)["max_tokens"])
+        XCTAssertEqual(chatBody(.high, style: .compatible)["max_tokens"]?.intValue, 1024)
+        XCTAssertNil(chatBody(.high, style: .compatible)["max_completion_tokens"])
+    }
+
+    func testSeedKeyMatchesWire() {
+        let req = LanguageModelRequest(messages: [.user("hi")], maxOutputTokens: 1024, seed: 7)
+        let mistral = OpenAIChatModel.requestBody(for: req, modelID: "m", reasoningStyle: .mistral)
+            .objectValue ?? [:]
+        XCTAssertEqual(mistral["random_seed"]?.intValue, 7)
+        XCTAssertNil(mistral["seed"])
+        let compat = OpenAIChatModel.requestBody(for: req, modelID: "m", reasoningStyle: .compatible)
+            .objectValue ?? [:]
+        XCTAssertEqual(compat["seed"]?.intValue, 7)
+        XCTAssertNil(compat["random_seed"])
+    }
+
+    func testDeltaDecodesMistralArrayContent() throws {
+        let json = """
+        {"choices":[{"delta":{"content":[\
+        {"type":"thinking","thinking":[{"type":"text","text":"weigh it"}]},\
+        {"type":"text","text":"answer"}\
+        ]}}]}
+        """.data(using: .utf8)!
+        let chunk = try JSONDecoder().decode(OpenAIChunk.self, from: json)
+        let delta = chunk.choices?.first?.delta
+        XCTAssertEqual(delta?.content, "answer")
+        XCTAssertEqual(delta?.reasoning_content, "weigh it")
+    }
+
+    func testDeltaStillDecodesStringContent() throws {
+        let json = #"{"choices":[{"delta":{"content":"plain"}}]}"#.data(using: .utf8)!
+        let chunk = try JSONDecoder().decode(OpenAIChunk.self, from: json)
+        XCTAssertEqual(chunk.choices?.first?.delta?.content, "plain")
     }
 
     func testOpenRouterSendsNestedReasoningObject() {
@@ -219,21 +297,71 @@ final class ReasoningTests: XCTestCase {
         XCTAssertNil(body["reasoning"]?["summary"])
     }
 
+    func testResponsesProviderOptionsMergeKeepsBuiltSubkeys() {
+        let body = OpenAIModel.responsesBody(
+            for: LanguageModelRequest(
+                messages: [.user("hi")],
+                reasoning: .high,
+                responseFormat: .json(schema: .object(["type": .string("object")]), name: "Out"),
+                providerOptions: .object([
+                    "text": .object(["verbosity": .string("low")]),
+                    "reasoning": .object(["summary": .string("auto")])
+                ])
+            ),
+            modelID: "gpt-5.6"
+        ).objectValue ?? [:]
+        XCTAssertEqual(body["text"]?["verbosity"]?.stringValue, "low")
+        XCTAssertEqual(body["text"]?["format"]?["name"]?.stringValue, "Out")
+        XCTAssertEqual(body["reasoning"]?["effort"]?.stringValue, "high")
+        XCTAssertEqual(body["reasoning"]?["summary"]?.stringValue, "auto")
+    }
+
     func testXaiResponsesMapsEffort() {
         let body = XaiModel.responsesBody(
             for: request(.minimal), modelID: "grok-4"
         ).objectValue ?? [:]
         XCTAssertEqual(body["reasoning"]?["effort"]?.stringValue, "low")
+        XCTAssertEqual(body["reasoning"]?["summary"]?.stringValue, "auto")
 
         let none = XaiModel.responsesBody(
             for: request(ReasoningEffort.none), modelID: "grok-4"
         ).objectValue ?? [:]
         XCTAssertEqual(none["reasoning"]?["effort"]?.stringValue, "none")
+        XCTAssertNil(none["reasoning"]?["summary"])
 
         let fixed = XaiModel.responsesBody(
             for: request(.high), modelID: "grok-4.20-reasoning"
         ).objectValue ?? [:]
         XCTAssertNil(fixed["reasoning"])
+    }
+
+    func testXaiResponsesForwardsIncludeAndMaxTurns() {
+        let body = XaiModel.responsesBody(
+            for: request(
+                .providerDefault,
+                providerOptions: .object([
+                    "include": .array([.string("reasoning.encrypted_content")]),
+                    "max_turns": .number(6)
+                ])
+            ),
+            modelID: "grok-4"
+        ).objectValue ?? [:]
+        XCTAssertEqual(body["include"]?.arrayValue?.first?.stringValue, "reasoning.encrypted_content")
+        XCTAssertEqual(body["max_turns"]?.intValue, 6)
+    }
+
+    func testXaiResponsesProviderOptionsMergeKeepsEffort() {
+        let body = XaiModel.responsesBody(
+            for: request(
+                .high,
+                providerOptions: .object([
+                    "reasoning": .object(["summary": .string("detailed")])
+                ])
+            ),
+            modelID: "grok-4"
+        ).objectValue ?? [:]
+        XCTAssertEqual(body["reasoning"]?["effort"]?.stringValue, "high")
+        XCTAssertEqual(body["reasoning"]?["summary"]?.stringValue, "detailed")
     }
 
     private func anthropicBody(
@@ -318,6 +446,13 @@ final class ReasoningTests: XCTestCase {
             googleThinking(ReasoningEffort.none, modelID: "gemini-3.5-flash")?["thinkingLevel"]?.stringValue,
             "minimal"
         )
+        XCTAssertEqual(
+            googleThinking(.high, modelID: "gemini-3.5-flash")?["includeThoughts"]?.boolValue, true
+        )
+        XCTAssertEqual(
+            googleThinking(ReasoningEffort.none, modelID: "gemini-3.5-flash")?["includeThoughts"]?.boolValue,
+            false
+        )
     }
 
     func testGemini25TakesThinkingBudgets() {
@@ -336,6 +471,13 @@ final class ReasoningTests: XCTestCase {
         XCTAssertEqual(
             googleThinking(.xhigh, modelID: "gemini-3-pro-image")?["thinkingBudget"]?.intValue,
             32768
+        )
+        XCTAssertEqual(
+            googleThinking(.medium, modelID: "gemini-2.5-pro")?["includeThoughts"]?.boolValue, true
+        )
+        XCTAssertEqual(
+            googleThinking(ReasoningEffort.none, modelID: "gemini-2.5-flash")?["includeThoughts"]?.boolValue,
+            false
         )
     }
 

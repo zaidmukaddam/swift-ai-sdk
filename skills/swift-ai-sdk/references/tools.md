@@ -216,7 +216,17 @@ static func webSearch(allowedDomains: [String]? = nil, externalWebAccess: Bool? 
 static func webSearchPreview(searchContextSize: String? = nil, userLocation: JSONValue? = nil, name: String = "web_search_preview") -> ProviderDefinedTool
 static func fileSearch(vectorStoreIds: [String], maxNumResults: Int? = nil, filters: JSONValue? = nil, name: String = "file_search") -> ProviderDefinedTool
 static func codeInterpreter(fileIds: [String]? = nil, name: String = "code_interpreter") -> ProviderDefinedTool
+static func computerUse(displayWidth: Int, displayHeight: Int, environment: String = "browser", name: String = "computer_use_preview") -> ProviderDefinedTool
 ```
+
+### GroqModel.Tools (`provider: "groq"`)
+
+```swift
+static func browserSearch(name: String = "browser_search") -> ProviderDefinedTool
+static func codeExecution(name: String = "code_execution") -> ProviderDefinedTool
+```
+
+For Groq's `groq/compound` models.
 
 ### GoogleModel.Tools (`provider: "google"`)
 
@@ -265,6 +275,39 @@ let custom = ProviderDefinedTool(
 ## Validation
 
 When `parameters` is built from the `Schema` DSL, arguments are validated before execution; malformed calls become error `ToolResult`s for the model to correct instead of crashing the tool.
+
+## Computer use
+
+Computer-use tools are **client-executed**. The model asks for an action; your code performs it and returns a screenshot. On OpenAI, `OpenAIModel.Tools.computerUse(displayWidth:displayHeight:)` surfaces each `computer_call` as a `computer_use_preview` tool call (`.arguments["action"]`); return the screenshot as `.image` content on the `ToolResult` and the library maps it to `computer_call_output`. On Anthropic, `AnthropicModel.Tools.computer(...)` / `bash()` / `textEditor()` run through the normal tool loop with the beta header set for you.
+
+```swift
+let call = result.toolCalls.first { $0.name == "computer_use_preview" }!
+let png = try await perform(call.arguments["action"] ?? .object([:]))
+messages.append(Message(role: .assistant, content: [.toolCall(call)]))
+messages.append(Message(role: .tool, content: [.toolResult(ToolResult(
+  toolCallID: call.id, name: call.name, output: .null,
+  content: [.image(ImageContent(data: png, mediaType: "image/png"))]
+))]))
+```
+
+## Multimodal tool results
+
+Any tool can hand the model images, not just text. Set `Tool.modelOutput` to map the output to `[ContentPart]` (text + images); it populates `ToolResult.content`, which providers that support it (Anthropic image blocks, OpenAI computer output) send back. Providers without support fall back to the JSON `output`.
+
+```swift
+var shot = Tool(name: "screenshot", description: "…", parameters: schema) { _ in .object([:]) }
+shot.modelOutput = { _ in [.text("Screen:"), .image(ImageContent(data: png, mediaType: "image/png"))] }
+```
+
+## Repairing tool calls
+
+`repairToolCall` on `generateText`/`streamText` fires when a call names a tool that isn't in the set. Return a corrected `ToolCall`, or `nil` to skip.
+
+```swift
+repairToolCall: { call, tools in
+  call.name == "web_serch" ? ToolCall(id: call.id, name: "web_search", arguments: call.arguments) : nil
+}
+```
 
 ## Gotchas
 

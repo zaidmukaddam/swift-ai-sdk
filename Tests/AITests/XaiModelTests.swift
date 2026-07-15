@@ -167,4 +167,52 @@ final class XaiModelTests: XCTestCase {
         XCTAssertEqual(input["code"], .string("print(1)"))
         XCTAssertEqual(result["output"], .string("1"))
     }
+
+    func testParseDeferredExtractsTextReasoningAndUsage() {
+        let completion: JSONValue = .object([
+            "choices": .array([.object([
+                "message": .object([
+                    "content": .string("hello"),
+                    "reasoning_content": .string("thinking")
+                ]),
+                "finish_reason": .string("stop")
+            ])]),
+            "usage": .object([
+                "prompt_tokens": .number(12),
+                "completion_tokens": .number(7),
+                "completion_tokens_details": .object(["reasoning_tokens": .number(3)])
+            ])
+        ])
+        let result = XaiModel.parseDeferred(completion)
+        XCTAssertEqual(result.text, "hello")
+        XCTAssertEqual(result.reasoning, "thinking")
+        XCTAssertEqual(result.finishReason, .stop)
+        XCTAssertEqual(result.usage.inputTokens, 12)
+        XCTAssertEqual(result.usage.outputTokens, 7)
+        XCTAssertEqual(result.usage.reasoningTokens, 3)
+    }
+
+    func testMapChatFinishReasonTable() {
+        XCTAssertEqual(XaiModel.mapChatFinishReason("stop"), .stop)
+        XCTAssertEqual(XaiModel.mapChatFinishReason("length"), .length)
+        XCTAssertEqual(XaiModel.mapChatFinishReason("tool_calls"), .toolCalls)
+        XCTAssertEqual(XaiModel.mapChatFinishReason("content_filter"), .contentFilter)
+        XCTAssertEqual(XaiModel.mapChatFinishReason(nil), .other)
+    }
+
+    func testXaiFileParsesMetadata() {
+        let json: JSONValue = .object([
+            "id": .string("file-123"),
+            "filename": .string("doc.pdf"),
+            "bytes": .number(2048),
+            "created_at": .number(1_700_000_000),
+            "public_url": .string("https://x.ai/f/doc.pdf")
+        ])
+        let file = XaiFile(json)
+        XCTAssertEqual(file?.id, "file-123")
+        XCTAssertEqual(file?.filename, "doc.pdf")
+        XCTAssertEqual(file?.bytes, 2048)
+        XCTAssertEqual(file?.publicURL, "https://x.ai/f/doc.pdf")
+        XCTAssertNil(XaiFile(.object(["filename": .string("no-id.pdf")])))
+    }
 }

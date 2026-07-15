@@ -18,16 +18,19 @@ public struct ToolResult: Sendable, Hashable {
     public var toolCallID: String
     public var name: String
     public var output: JSONValue
+    public var content: [ContentPart]?
     public var isError: Bool
     public var denied: Bool
 
     public init(
         toolCallID: String, name: String, output: JSONValue,
+        content: [ContentPart]? = nil,
         isError: Bool = false, denied: Bool = false
     ) {
         self.toolCallID = toolCallID
         self.name = name
         self.output = output
+        self.content = content
         self.isError = isError
         self.denied = denied
     }
@@ -41,6 +44,7 @@ public protocol AIToolProtocol: Sendable {
     func needsApproval(_ arguments: JSONValue) async -> Bool
     func execute(_ arguments: JSONValue) async throws -> JSONValue
     func execute(_ arguments: JSONValue, options: ToolExecutionOptions) async throws -> JSONValue
+    func toModelOutput(_ output: JSONValue) -> [ContentPart]?
 }
 
 public struct ToolExecutionOptions: Sendable {
@@ -63,6 +67,7 @@ public extension AIToolProtocol {
     ) async throws -> JSONValue {
         try await execute(arguments)
     }
+    func toModelOutput(_ output: JSONValue) -> [ContentPart]? { nil }
 }
 
 public struct Tool: AIToolProtocol {
@@ -72,8 +77,14 @@ public struct Tool: AIToolProtocol {
     private let run: (@Sendable (JSONValue) async throws -> JSONValue)?
     private let contextualRun: (@Sendable (JSONValue, ToolExecutionOptions) async throws -> JSONValue)?
     private let approvalCheck: (@Sendable (JSONValue) async -> Bool)?
+    public var modelOutput: (@Sendable (JSONValue) -> [ContentPart]?)? = nil
 
     public var hasExecutor: Bool { run != nil || contextualRun != nil }
+
+    public func toModelOutput(_ output: JSONValue) -> [ContentPart]? {
+        if let modelOutput { return modelOutput(output) }
+        return nil
+    }
 
     public init(
         name: String,

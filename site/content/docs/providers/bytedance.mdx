@@ -1,0 +1,48 @@
+---
+title: ByteDance
+description: Seedream image and Seedance video on the BytePlus Ark API.
+---
+
+Both models read `ARK_API_KEY` and target
+`https://ark.ap-southeast.bytepluses.com/api/v3`.
+
+## Images
+
+`ByteDanceImageModel` conforms to `ImageModel` and works with
+[`generateImage`](/docs/image-generation):
+
+```swift
+let result = try await generateImage(
+  model: ByteDanceImageModel("seedream-4-0-250828"),
+  prompt: "A koi pond at dusk",
+  size: "2048x2048"
+)
+```
+
+## Video
+
+`ByteDanceVideoModel` conforms to `VideoModel` and works with
+[`generateVideos`](/docs/video-generation). It submits a task and polls until
+the clip is ready; pass an image for image-to-video:
+
+```swift
+let video = try await generateVideos(
+  model: ByteDanceVideoModel("seedance-1-0-pro-250528"),
+  prompt: "The koi swim in a slow circle"
+)
+```
+
+## Models
+
+As of July 2026:
+
+| Model ID | Kind |
+| --- | --- |
+| `seedream-5-0-260128` / `seedream-5-0-lite-260128` | Image |
+| `seedream-4-5-251128` / `seedream-4-0-250828` | Image |
+| `seedance-1-5-pro-251215` | Video |
+| `seedance-1-0-pro-250528` | Video |
+| `seedance-1-0-lite-t2v-250428` / `-i2v-250428` | Video (text / image) |
+
+Model ids are date-stamped snapshots, so check the
+[Ark console](https://console.bytepluses.com/ark) for the current ids.

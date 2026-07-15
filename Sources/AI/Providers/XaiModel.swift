@@ -9,7 +9,7 @@ public struct XaiModel: LanguageModel {
 
     private enum Backend: Sendable {
         case responses(ResponsesConfig)
-        case chat(OpenAIChatModel)
+        case chat(OpenAIChatModel, ResponsesConfig)
     }
 
     struct ResponsesConfig: Sendable {
@@ -44,33 +44,159 @@ public struct XaiModel: LanguageModel {
         headers: [String: String] = [:],
         urlSession: URLSession = .shared
     ) -> XaiModel {
-        XaiModel(modelID: modelID, chatEngine: OpenAIChatModel(
+        let key = apiKey ?? ProcessInfo.processInfo.environment["XAI_API_KEY"] ?? ""
+        let engine = OpenAIChatModel(
             modelID,
-            apiKey: apiKey ?? ProcessInfo.processInfo.environment["XAI_API_KEY"] ?? "",
+            apiKey: key,
             baseURL: baseURL,
             headers: headers,
             queryParams: [:],
             urlSession: urlSession,
             providerName: "xai"
+        )
+        return XaiModel(modelID: modelID, chatEngine: engine, config: ResponsesConfig(
+            apiKey: key, baseURL: baseURL, headers: headers, urlSession: urlSession
         ))
     }
 
-    private init(modelID: String, chatEngine: OpenAIChatModel) {
+    private init(modelID: String, chatEngine: OpenAIChatModel, config: ResponsesConfig) {
         self.modelID = modelID
-        self.backend = .chat(chatEngine)
+        self.backend = .chat(chatEngine, config)
     }
 
     public func stream(
         _ request: LanguageModelRequest
     ) async throws -> AsyncThrowingStream<StreamPart, Error> {
         switch backend {
-        case .chat(let engine):
+        case .chat(let engine, _):
             return try await engine.stream(request)
         case .responses(let config):
             return try await Self.streamResponses(config, modelID: modelID, request: request)
         }
     }
 
+    public struct DeferredCompletion: Sendable {
+        public var text: String
+        public var reasoning: String?
+        public var finishReason: FinishReason
+        public var usage: Usage
+        public var raw: JSONValue
+    }
+
+    public func submitDeferredCompletion(
+        _ request: LanguageModelRequest,
+        pollInterval: TimeInterval = 2,
+        pollTimeout: TimeInterval = 600
+    ) async throws -> DeferredCompletion {
+        guard case .chat(_, let config) = backend else {
+            throw AIError.invalidRequest("Deferred completions require XaiModel.chat(...)")
+        }
+        var body = OpenAIChatModel.requestBody(
+            for: request, modelID: modelID, reasoningStyle: .xaiChat
+        ).objectValue ?? [:]
+        body["stream"] = .bool(false)
+        body["deferred"] = .bool(true)
+
+        var submit = URLRequest(url: config.baseURL.appendingPathComponent("chat/completions"))
+        submit.httpMethod = "POST"
+        if !config.apiKey.isEmpty {
+            submit.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        }
+        submit.setValue("application/json", forHTTPHeaderField: "content-type")
+        for (field, value) in config.headers { submit.setValue(value, forHTTPHeaderField: field) }
+        submit.httpBody = try JSONEncoder().encode(JSONValue.object(body))
+
+        let (submitData, submitResponse) = try await config.urlSession.data(for: submit)
+        if let http = submitResponse as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw AIError.http(status: http.statusCode, body: String(decoding: submitData, as: UTF8.self))
+        }
+        guard let requestID = try JSONDecoder().decode(JSONValue.self, from: submitData)["request_id"]?.stringValue
+        else { throw AIError.decoding("xAI deferred completion returned no request_id") }
+
+        let deadline = Date().addingTimeInterval(pollTimeout)
+        while true {
+            try await Task.sleep(nanoseconds: pollNanoseconds(pollInterval))
+            if Date() > deadline { throw AIError.transport("xAI deferred completion timed out") }
+            var poll = URLRequest(
+                url: config.baseURL.appendingPathComponent("chat/deferred-completion/\(requestID)")
+            )
+            if !config.apiKey.isEmpty {
+                poll.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+            }
+            for (field, value) in config.headers { poll.setValue(value, forHTTPHeaderField: field) }
+            let (pollData, pollResponse) = try await config.urlSession.data(for: poll)
+            guard let http = pollResponse as? HTTPURLResponse else { continue }
+            if http.statusCode == 202 { continue }
+            if !(200..<300).contains(http.statusCode) {
+                throw AIError.http(status: http.statusCode, body: String(decoding: pollData, as: UTF8.self))
+            }
+            return Self.parseDeferred(try JSONDecoder().decode(JSONValue.self, from: pollData))
+        }
+    }
+
+    static func parseDeferred(_ completion: JSONValue) -> DeferredCompletion {
+        let choice = completion["choices"]?.arrayValue?.first
+        let message = choice?["message"]
+        let usage = completion["usage"]
+        return DeferredCompletion(
+            text: message?["content"]?.stringValue ?? "",
+            reasoning: message?["reasoning_content"]?.stringValue,
+            finishReason: mapChatFinishReason(choice?["finish_reason"]?.stringValue),
+            usage: Usage(
+                inputTokens: usage?["prompt_tokens"]?.intValue ?? 0,
+                outputTokens: usage?["completion_tokens"]?.intValue ?? 0,
+                cachedInputTokens: usage?["prompt_tokens_details"]?["cached_tokens"]?.intValue,
+                reasoningTokens: usage?["completion_tokens_details"]?["reasoning_tokens"]?.intValue
+            ),
+            raw: completion
+        )
+    }
+
+    static func mapChatFinishReason(_ reason: String?) -> FinishReason {
+        switch reason {
+        case "stop": return .stop
+        case "length": return .length
+        case "tool_calls", "function_call": return .toolCalls
+        case "content_filter": return .contentFilter
+        default: return .other
+        }
+    }
+
+    public func compactResponse(
+        previousResponseID: String,
+        providerOptions: JSONValue? = nil
+    ) async throws -> JSONValue {
+        let config: ResponsesConfig
+        switch backend {
+        case .responses(let c): config = c
+        case .chat(_, let c): config = c
+        }
+        var body: [String: JSONValue] = [
+            "model": .string(modelID),
+            "previous_response_id": .string(previousResponseID)
+        ]
+        if case .object(let options)? = providerOptions {
+            for (key, value) in options { body[key] = value }
+        }
+        var urlRequest = URLRequest(url: config.baseURL.appendingPathComponent("responses/compact"))
+        urlRequest.httpMethod = "POST"
+        if !config.apiKey.isEmpty {
+            urlRequest.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        }
+        urlRequest.setValue("application/json", forHTTPHeaderField: "content-type")
+        for (field, value) in config.headers { urlRequest.setValue(value, forHTTPHeaderField: field) }
+        urlRequest.httpBody = try JSONEncoder().encode(JSONValue.object(body))
+        let (data, response) = try await config.urlSession.data(for: urlRequest)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw AIError.http(status: http.statusCode, body: String(decoding: data, as: UTF8.self))
+        }
+        return try JSONDecoder().decode(JSONValue.self, from: data)
+    }
+
+    @available(
+        *, deprecated,
+        message: "xAI deprecated Live Search (search_parameters). Use the provider-executed tools XaiModel.Tools.webSearch() / xSearch() instead."
+    )
     public struct SearchParameters: Sendable {
         public enum Mode: String, Sendable {
             case auto, on, off
@@ -78,11 +204,14 @@ public struct XaiModel: LanguageModel {
 
         public enum SearchSource: Sendable {
             case web(country: String? = nil, excludedWebsites: [String]? = nil,
-                     allowedWebsites: [String]? = nil, safeSearch: Bool? = nil)
+                     allowedWebsites: [String]? = nil, safeSearch: Bool? = nil,
+                     enableImageSearch: Bool? = nil, enableImageUnderstanding: Bool? = nil)
             case x(includedHandles: [String]? = nil, excludedHandles: [String]? = nil,
-                   postFavoriteCount: Int? = nil, postViewCount: Int? = nil)
+                   postFavoriteCount: Int? = nil, postViewCount: Int? = nil,
+                   enableVideoUnderstanding: Bool? = nil)
             case news(country: String? = nil, excludedWebsites: [String]? = nil,
                       safeSearch: Bool? = nil)
+            case rss(links: [String])
         }
 
         public var mode: Mode
@@ -123,7 +252,8 @@ public struct XaiModel: LanguageModel {
             if !sources.isEmpty {
                 object["sources"] = .array(sources.map { source in
                     switch source {
-                    case .web(let country, let excluded, let allowed, let safeSearch):
+                    case .web(let country, let excluded, let allowed, let safeSearch,
+                              let imageSearch, let imageUnderstanding):
                         var web: [String: JSONValue] = ["type": "web"]
                         if let country { web["country"] = .string(country) }
                         if let excluded {
@@ -133,8 +263,13 @@ public struct XaiModel: LanguageModel {
                             web["allowed_websites"] = .array(allowed.map { .string($0) })
                         }
                         if let safeSearch { web["safe_search"] = .bool(safeSearch) }
+                        if let imageSearch { web["enable_image_search"] = .bool(imageSearch) }
+                        if let imageUnderstanding {
+                            web["enable_image_understanding"] = .bool(imageUnderstanding)
+                        }
                         return .object(web)
-                    case .x(let included, let excluded, let favorites, let views):
+                    case .x(let included, let excluded, let favorites, let views,
+                            let videoUnderstanding):
                         var x: [String: JSONValue] = ["type": "x"]
                         if let included {
                             x["included_x_handles"] = .array(included.map { .string($0) })
@@ -144,6 +279,9 @@ public struct XaiModel: LanguageModel {
                         }
                         if let favorites { x["post_favorite_count"] = .number(Double(favorites)) }
                         if let views { x["post_view_count"] = .number(Double(views)) }
+                        if let videoUnderstanding {
+                            x["enable_video_understanding"] = .bool(videoUnderstanding)
+                        }
                         return .object(x)
                     case .news(let country, let excluded, let safeSearch):
                         var news: [String: JSONValue] = ["type": "news"]
@@ -153,6 +291,11 @@ public struct XaiModel: LanguageModel {
                         }
                         if let safeSearch { news["safe_search"] = .bool(safeSearch) }
                         return .object(news)
+                    case .rss(let links):
+                        return .object([
+                            "type": "rss",
+                            "links": .array(links.map { .string($0) })
+                        ])
                     }
                 })
             }
@@ -428,7 +571,9 @@ public struct XaiModel: LanguageModel {
             case .xhigh: effort = "high"
             default: effort = request.reasoning.rawValue
             }
-            body["reasoning"] = .object(["effort": .string(effort)])
+            var reasoningObject: [String: JSONValue] = ["effort": .string(effort)]
+            if effort != "none" { reasoningObject["summary"] = .string("auto") }
+            body["reasoning"] = .object(reasoningObject)
         }
 
         if case .object(let options)? = request.providerOptions {
@@ -436,6 +581,10 @@ public struct XaiModel: LanguageModel {
                 if key == "tools", case .array(let extra) = value,
                    case .array(let existing)? = body["tools"] {
                     body["tools"] = .array(existing + extra)
+                } else if case .object(let extra) = value,
+                          case .object(var existing)? = body[key] {
+                    for (k, v) in extra { existing[k] = v }
+                    body[key] = .object(existing)
                 } else {
                     body[key] = value
                 }

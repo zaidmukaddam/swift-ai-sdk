@@ -147,6 +147,87 @@ public struct SarvamTranscriptionModel: TranscriptionModel {
     }
 }
 
+public struct XaiTranscriptionModel: TranscriptionModel {
+    public let provider = "xai"
+    public let modelID: String
+
+    private let apiKey: String
+    private let baseURL: URL
+    private let headers: [String: String]
+    private let urlSession: URLSession
+
+    public init(
+        _ modelID: String = "grok-stt",
+        apiKey: String? = nil,
+        baseURL: URL = URL(string: "https://api.x.ai/v1")!,
+        headers: [String: String] = [:],
+        urlSession: URLSession = .shared
+    ) {
+        self.modelID = modelID
+        self.apiKey = apiKey ?? ProcessInfo.processInfo.environment["XAI_API_KEY"] ?? ""
+        self.baseURL = baseURL
+        self.headers = headers
+        self.urlSession = urlSession
+    }
+
+    public func transcribe(_ request: TranscriptionModelRequest) async throws -> TranscriptionModelResponse {
+        let (data, response) = try await urlSession.data(for: buildURLRequest(request))
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw AIError.http(status: http.statusCode, body: String(decoding: data, as: UTF8.self))
+        }
+        return Self.parse(try JSONDecoder().decode(JSONValue.self, from: data))
+    }
+
+    static func parse(_ decoded: JSONValue) -> TranscriptionModelResponse {
+        let words = decoded["words"]?.arrayValue ?? []
+        return TranscriptionModelResponse(
+            text: decoded["text"]?.stringValue ?? "",
+            segments: words.compactMap { word in
+                guard let text = word["text"]?.stringValue else { return nil }
+                return TranscriptionSegment(
+                    text: text,
+                    startSecond: word["start"]?.doubleValue ?? 0,
+                    endSecond: word["end"]?.doubleValue ?? 0
+                )
+            },
+            language: decoded["language"]?.stringValue,
+            durationInSeconds: decoded["duration"]?.doubleValue
+        )
+    }
+
+    func buildURLRequest(_ request: TranscriptionModelRequest) -> URLRequest {
+        var form = MultipartForm(boundary: "swift-ai-sdk-xai-stt")
+        form.addField(name: "model", value: modelID)
+        if case .object(let options)? = request.providerOptions {
+            for (key, value) in options where key != "model" {
+                if case .string(let string) = value {
+                    form.addField(name: key, value: string)
+                } else if case .bool(let flag) = value {
+                    form.addField(name: key, value: flag ? "true" : "false")
+                }
+            }
+        }
+        form.addFile(
+            name: "file",
+            filename: "audio.\(SarvamTranscriptionModel.fileExtension(for: request.mediaType))",
+            mediaType: request.mediaType,
+            data: request.audio
+        )
+
+        var urlRequest = URLRequest(url: baseURL.appendingPathComponent("stt"))
+        urlRequest.httpMethod = "POST"
+        if !apiKey.isEmpty {
+            urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
+        urlRequest.setValue(
+            "multipart/form-data; boundary=\(form.boundary)", forHTTPHeaderField: "content-type"
+        )
+        for (field, value) in headers { urlRequest.setValue(value, forHTTPHeaderField: field) }
+        urlRequest.httpBody = form.finish()
+        return urlRequest
+    }
+}
+
 public struct AssemblyAITranscriptionModel: TranscriptionModel {
     public let provider = "assemblyai"
     public let modelID: String

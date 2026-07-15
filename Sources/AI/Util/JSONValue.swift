@@ -79,3 +79,13 @@ extension JSONValue: ExpressibleByDictionaryLiteral {
         self = .object(Dictionary(uniqueKeysWithValues: elements))
     }
 }
+
+extension JSONValue {
+    static func mergingMetadata(_ base: JSONValue?, _ addition: JSONValue) -> JSONValue {
+        guard case .object(var merged) = base ?? .object([:]),
+              case .object(let extra) = addition
+        else { return addition }
+        for (key, value) in extra { merged[key] = value }
+        return .object(merged)
+    }
+}

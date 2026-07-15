@@ -17,6 +17,7 @@ public struct StepResult: Sendable {
     public var toolResults: [ToolResult]
     public var sources: [Source]
     public var approvalRequests: [ToolApprovalRequest]
+    public var providerMetadata: JSONValue?
     public var finishReason: FinishReason
     public var usage: Usage
 
@@ -27,6 +28,7 @@ public struct StepResult: Sendable {
         toolResults: [ToolResult] = [],
         sources: [Source] = [],
         approvalRequests: [ToolApprovalRequest] = [],
+        providerMetadata: JSONValue? = nil,
         finishReason: FinishReason = .stop,
         usage: Usage = Usage()
     ) {
@@ -36,6 +38,7 @@ public struct StepResult: Sendable {
         self.toolResults = toolResults
         self.sources = sources
         self.approvalRequests = approvalRequests
+        self.providerMetadata = providerMetadata
         self.finishReason = finishReason
         self.usage = usage
     }

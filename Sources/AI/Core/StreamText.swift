@@ -10,6 +10,7 @@ public enum TextStreamPart: Sendable {
     case toolResult(ToolResult)
     case toolApprovalRequest(ToolApprovalRequest)
     case source(Source)
+    case providerMetadata(JSONValue)
     case finishStep(StepResult)
     case finish(finishReason: FinishReason, totalUsage: Usage)
 }
@@ -60,6 +61,9 @@ public func streamText(
     onStepFinish: OnStepFinish? = nil,
     onFinish: (@Sendable (GenerateTextResult) async -> Void)? = nil,
     onError: (@Sendable (Error) async -> Void)? = nil,
+    onChunk: (@Sendable (TextStreamPart) -> Void)? = nil,
+    onAbort: (@Sendable () async -> Void)? = nil,
+    repairToolCall: (@Sendable (ToolCall, [any AIToolProtocol]) async -> ToolCall?)? = nil,
     maxRetries: Int = 2
 ) -> StreamTextResult {
     let parameters = GenerationParameters(
@@ -85,6 +89,7 @@ public func streamText(
         prepareCall: prepareCall,
         prepareStep: prepareStep,
         onStepFinish: onStepFinish,
+        repairToolCall: repairToolCall,
         maxRetries: maxRetries
     )
 
@@ -105,10 +110,16 @@ public func streamText(
                         ]
                     }
                 ) {
-                    try await runGenerationLoop(parameters) { continuation.yield($0) }
+                    try await runGenerationLoop(parameters) { part in
+                        onChunk?(part)
+                        continuation.yield(part)
+                    }
                 }
                 await onFinish?(GenerateTextResult(outcome: outcome))
                 continuation.finish()
+            } catch is CancellationError {
+                await onAbort?()
+                continuation.finish(throwing: CancellationError())
             } catch {
                 await onError?(error)
                 continuation.finish(throwing: error)
@@ -142,6 +153,7 @@ struct GenerationParameters: Sendable {
     var prepareCall: PrepareCall? = nil
     var prepareStep: PrepareStep?
     var onStepFinish: OnStepFinish?
+    var repairToolCall: (@Sendable (ToolCall, [any AIToolProtocol]) async -> ToolCall?)? = nil
     var maxRetries: Int
 }
 
@@ -267,6 +279,7 @@ func runGenerationLoop(
         var providerCalls: [ToolCall] = []
         var providerResults: [ToolResult] = []
         var sources: [Source] = []
+        var stepMetadata: JSONValue?
         var stepFinish: FinishReason = .stop
         var stepUsage = Usage()
 
@@ -295,6 +308,9 @@ func runGenerationLoop(
             case .source(let source):
                 sources.append(source)
                 emit(.source(source))
+            case .providerMetadata(let meta):
+                stepMetadata = JSONValue.mergingMetadata(stepMetadata, meta)
+                emit(.providerMetadata(meta))
             case .finish(let reason, let usage):
                 stepFinish = reason
                 stepUsage = usage
@@ -318,7 +334,12 @@ func runGenerationLoop(
                 stepTools.map { ($0.name, $0) }, uniquingKeysWith: { a, _ in a }
             )
             var executable: [ToolCall] = []
-            for call in calls {
+            for original in calls {
+                var call = original
+                if toolIndex[call.name] == nil, let repair = parameters.repairToolCall,
+                   let repaired = await repair(call, stepTools) {
+                    call = repaired
+                }
                 guard let tool = toolIndex[call.name] else {
                     executable.append(call)
                     continue
@@ -354,6 +375,7 @@ func runGenerationLoop(
             toolResults: providerResults + results,
             sources: sources,
             approvalRequests: approvalRequests,
+            providerMetadata: stepMetadata,
             finishReason: stepFinish,
             usage: stepUsage
         )
@@ -464,7 +486,10 @@ func executeToolCalls(
                         context: toolsContext[call.name]
                     )
                     let output = try await tool.execute(call.arguments, options: options)
-                    return (order, ToolResult(toolCallID: call.id, name: call.name, output: output))
+                    return (order, ToolResult(
+                        toolCallID: call.id, name: call.name, output: output,
+                        content: tool.toModelOutput(output)
+                    ))
                 } catch {
                     return (order, ToolResult(
                         toolCallID: call.id, name: call.name,

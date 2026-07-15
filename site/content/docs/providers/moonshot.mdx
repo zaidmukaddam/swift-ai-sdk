@@ -1,0 +1,32 @@
+---
+title: Moonshot AI
+description: Kimi models over a first-class Swift provider pack.
+---
+
+`MoonshotModel` reads `MOONSHOT_API_KEY` and targets
+`https://api.moonshot.ai/v1`.
+
+```swift
+let model = MoonshotModel("kimi-k2.7-code")
+let result = try await generateText(model: model, prompt: "Say hello.")
+print(result.text)
+```
+
+Pass `apiKey:`, `baseURL:`, `headers:`, or `queryParams:` to override the
+defaults. Tools, structured output, and streamed reasoning ride the shared
+chat-completions wire; reasoning traces surface as `.reasoningDelta`.
+
+## Models
+
+As of July 2026:
+
+| Model ID | Notes |
+| --- | --- |
+| `kimi-k2.7-code` | Newest code-tuned Kimi |
+| `kimi-k2.7-code-highspeed` | Faster code tier |
+| `kimi-k2.6` | General flagship |
+| `kimi-k2.5` | Prior flagship |
+| `moonshot-v1-8k` / `-32k` / `-128k` | v1 context tiers |
+
+Check Moonshot's [model list](https://platform.moonshot.ai/docs/pricing/chat)
+for the current lineup. Any id the API serves works.

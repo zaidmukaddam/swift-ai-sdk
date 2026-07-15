@@ -1,0 +1,50 @@
+---
+title: Voyage AI
+description: Retrieval embeddings and reranking from Voyage.
+---
+
+Both models read `VOYAGE_API_KEY` and target `https://api.voyageai.com/v1`.
+
+## Embeddings
+
+`VoyageEmbeddingModel` works with [`embed` and `embedMany`](/docs/embeddings).
+Pass `inputType: .query` or `.document` to match Voyage's asymmetric retrieval,
+and `outputDimension:` for Matryoshka truncation.
+
+```swift
+let vectors = try await embedMany(
+  model: VoyageEmbeddingModel("voyage-3.5", inputType: .document),
+  values: documents
+)
+```
+
+Requests batch at 128 inputs each and merge automatically.
+
+## Reranking
+
+`VoyageRerankingModel` works with [`rerank`](/docs/reranking):
+
+```swift
+let ranked = try await rerank(
+  model: VoyageRerankingModel("rerank-2.5"),
+  query: "How do I cancel my subscription?",
+  documents: documents,
+  topN: 3
+)
+ranked.rankedDocuments.first?.relevanceScore
+```
+
+## Models
+
+As of July 2026:
+
+| Model ID | Kind |
+| --- | --- |
+| `voyage-3.5` / `voyage-3.5-lite` | General embeddings |
+| `voyage-4` / `voyage-4-large` / `voyage-4-lite` / `voyage-4-nano` | Embeddings |
+| `voyage-code-3.5` | Code embeddings |
+| `voyage-finance-2` / `voyage-law-2` / `voyage-multilingual-2` | Domain embeddings |
+| `rerank-2.5` / `rerank-2.5-lite` | Reranking |
+
+See Voyage's [docs](https://docs.voyageai.com/docs/embeddings) for dimensions
+and context limits.

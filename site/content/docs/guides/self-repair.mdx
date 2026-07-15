@@ -1,0 +1,59 @@
+---
+title: Recover from bad model output
+description: Fix malformed tool calls and unparseable JSON without failing the request.
+---
+
+Covers `Examples/Features/25-ReliabilityAndOutput.swift`. Models occasionally
+misspell a tool name or wrap JSON in a code fence. Instead of erroring, you can
+hand the raw output back to a repair function that fixes it in place.
+
+<Steps>
+<Step>
+### Repair a tool call
+
+`repairToolCall` fires when a call references a tool that isn't in your set.
+Return a corrected `ToolCall`, or `nil` to leave it unhandled.
+
+```swift
+let result = try await generateText(
+  model: model, prompt: "…", tools: [weather],
+  repairToolCall: { call, tools in
+    call.name == "get_wether"
+      ? ToolCall(id: call.id, name: "get_weather", arguments: call.arguments) : nil
+  }
+)
+```
+
+For a heavier fix, re-ask a cheap model to reformat the arguments against the
+tool's schema and return the corrected call.
+</Step>
+
+<Step>
+### Repair structured output
+
+`repairText` on `generateObject` receives the raw text and the parse error, and
+returns corrected JSON. Stripping Markdown fences covers the common case.
+
+```swift
+let result = try await generateObject(
+  model: model, of: Summary.self, schema: summarySchema, prompt: "…",
+  repairText: { text, _ in
+    text.replacingOccurrences(of: "```json", with: "")
+        .replacingOccurrences(of: "```", with: "")
+  }
+)
+```
+</Step>
+
+<Step>
+### Prefer structure that can't drift
+
+When you need both tool use and a final object, `output:` on `generateText`
+produces the object alongside the calls; read it from
+`result.experimentalOutput`. For a list, `generateObjectArray` decodes a typed
+array directly.
+</Step>
+</Steps>
+
+Pair these with `maxRetries` (which re-runs the whole call): repair fixes a
+salvageable response, retries handle transient failures.

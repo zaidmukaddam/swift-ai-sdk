@@ -1,0 +1,110 @@
+---
+title: MCP
+description: Connect Model Context Protocol servers and bridge their tools into the loop.
+icon: Cable
+---
+
+The Model Context Protocol (MCP) is a standard way for servers to expose tools
+to a model. `MCPClient` connects to an MCP server, lists its tools, and turns
+each one into an ordinary tool you pass to `generateText` or `streamText`. The
+bridged tools validate arguments against the server's schemas and run in the
+same agent loop as your local tools.
+
+## Quick start
+
+Point a client at a transport, connect, and hand `tools()` to a generation call.
+This uses [DeepWiki](https://mcp.deepwiki.com), a public MCP server that answers
+questions about GitHub repositories and needs no key, so it runs as-is:
+
+```swift
+let mcp = MCPClient(transport: MCPHTTPTransport(
+  url: URL(string: "https://mcp.deepwiki.com/mcp")!
+))
+try await mcp.connect()
+defer { Task { await mcp.close() } }
+
+let result = try await generateText(
+  model: AnthropicModel("claude-sonnet-5"),
+  prompt: "Use the DeepWiki tools to explain how the modelcontextprotocol/modelcontextprotocol repository is organized.",
+  tools: try await mcp.tools(),
+  stopWhen: [stepCountIs(5)]
+)
+```
+
+`tools()` follows `nextCursor` pagination, so servers that page their tool list
+are fully enumerated in one call. `connect()` runs the initialize handshake once
+and is safe to call again; `close()` releases the transport (and, for stdio,
+terminates the subprocess).
+
+## Transports
+
+The client is transport-agnostic. Any `MCPTransport` works; the SDK ships three.
+
+### Streamable HTTP
+
+`MCPHTTPTransport` is the default. It speaks JSON-RPC over POST with SSE or JSON
+responses, carries `mcp-session-id` sessions, and takes custom headers for auth:
+
+```swift
+MCPHTTPTransport(
+  url: URL(string: "https://mcp.example.com/mcp")!,
+  headers: ["Authorization": "Bearer \(token)"]
+)
+```
+
+### Stdio
+
+`MCPStdioTransport` (macOS and Linux) launches a local server as a subprocess
+and speaks newline-delimited JSON-RPC over its stdin and stdout. A
+`requestTimeout` (default 60 seconds) bounds each call, so a hung or silent
+server fails instead of blocking forever:
+
+```swift
+let mcp = MCPClient(transport: MCPStdioTransport(
+  command: "npx",
+  arguments: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+  requestTimeout: 30
+))
+try await mcp.connect()
+defer { Task { await mcp.close() } }
+```
+
+Pass `environment:` to override variables for the child process and
+`workingDirectory:` to set its launch directory.
+
+### Legacy HTTP+SSE
+
+`MCPSSETransport` speaks the older HTTP+SSE protocol: a long-lived `GET` event
+stream for server messages plus a `POST` endpoint the server advertises for
+requests. Reach for it only with servers that predate Streamable HTTP. It takes
+the same `headers` and `requestTimeout` options as the HTTP transport:
+
+```swift
+MCPSSETransport(url: URL(string: "https://legacy.example.com/sse")!)
+```
+
+## Detecting tool-definition drift (rug pull)
+
+A compromised or malicious MCP server can change its tool definitions *after*
+you approved them, injecting instructions into a description or widening an input
+schema to capture more data. Fingerprint the tools you approved, then compare on
+every later fetch:
+
+```swift
+let baseline = fingerprintTools(try await mcp.tools())
+// store baseline, then on a later fetch:
+let drift = detectToolDrift(fingerprintTools(try await mcp.tools()), baseline: baseline)
+if drift.hasDrift {
+  // drift.changed / drift.added / drift.removed
+  // block or force re-approval; do not silently pass mutated tools to the model
+}
+```
+
+Your app owns baseline storage and decides the response. A fingerprint covers
+each tool's description and resolved input schema and is independent of JSON key
+order, so a server reordering schema keys does not read as drift.
+
+## Examples
+
+See [27-MCPTools.swift](https://github.com/zaidmukaddam/swift-ai-sdk/blob/main/Examples/Features/27-MCPTools.swift)
+for runnable HTTP, stdio, legacy SSE, and rug-pull examples.

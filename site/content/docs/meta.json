@@ -10,6 +10,7 @@
     "messages",
     "structured-output",
     "tools",
+    "mcp",
     "agents",
     "reasoning",
     "providers",

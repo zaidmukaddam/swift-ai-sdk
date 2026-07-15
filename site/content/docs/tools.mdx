@@ -134,3 +134,83 @@ tool entry the provider expects.
 When `parameters` is built from the `Schema` DSL, arguments are validated
 before execution and malformed calls become error results for the model to
 correct, instead of crashing your tool.
+
+## Repairing tool calls
+
+Pass `repairToolCall` to `generateText` / `streamText` to fix a call the
+model got wrong (an unknown tool name, mangled arguments) before it runs.
+Return a corrected `ToolCall`, or `nil` to leave it unhandled:
+
+```swift
+repairToolCall: { call, tools in
+  call.name == "web_serch" ? ToolCall(id: call.id, name: "web_search", arguments: call.arguments) : nil
+}
+```
+
+## Multimodal tool results
+
+A tool can hand the model images (not just text) by setting `modelOutput`,
+which maps its output to content parts. Providers that support it (Anthropic
+today) send them as image blocks; others fall back to the JSON output.
+
+```swift
+var screenshot = Tool(name: "screenshot", description: "…", parameters: schema) { _ in
+  .object(["path": .string("/tmp/shot.png")])
+}
+screenshot.modelOutput = { _ in [.text("Here's the screen:"), .image(ImageContent(data: pngBytes))] }
+```
+
+## Computer use
+
+The provider computer-use tools are client-executed: the model requests an
+action (click, type, scroll), your executor performs it and returns a
+screenshot via `.image` content, and the library wires the round-trip.
+
+- **OpenAI**: `OpenAIModel.Tools.computerUse(displayWidth:displayHeight:environment:)`.
+  `computer_call` actions surface as a `computer_use_preview` tool call; the
+  screenshot result maps back to `computer_call_output`.
+- **Anthropic**: `AnthropicModel.Tools.computer(displayWidthPx:displayHeightPx:)`,
+  `bash(...)`, `textEditor(...)`. The beta header is set automatically.
+
+Name your executor to match the tool (`computer_use_preview` for OpenAI, the
+`name:` you pass on Anthropic), return screenshots as `.image` content, and the
+agent loop handles the rest.
+
+## MCP tools
+
+`MCPClient` connects to a Model Context Protocol server and turns its tools
+into ordinary tools for the loop. Connect, then pass `tools()` to
+`generateText` or `streamText`:
+
+```swift
+let mcp = MCPClient(transport: MCPHTTPTransport(
+  url: URL(string: "https://mcp.example.com/mcp")!,
+  headers: ["Authorization": "Bearer \(token)"]
+))
+try await mcp.connect()
+defer { Task { await mcp.close() } }
+
+let result = try await generateText(
+  model: AnthropicModel("claude-sonnet-5"),
+  prompt: "What is on my calendar today?",
+  tools: try await mcp.tools(),
+  stopWhen: [stepCountIs(5)]
+)
+```
+
+Bridged tools validate arguments against the server's schemas and run in the
+same loop as local tools. `MCPStdioTransport` (local subprocess) and
+`MCPSSETransport` (legacy HTTP+SSE) are drop-in transport swaps.
+
+Before trusting a server's tools, fingerprint them and compare on later
+fetches so a server can't silently change a description or widen a schema
+after approval:
+
+```swift
+let baseline = fingerprintTools(try await mcp.tools())
+let drift = detectToolDrift(fingerprintTools(try await mcp.tools()), baseline: baseline)
+if drift.hasDrift { /* block or force re-approval */ }
+```
+
+See [MCP](/docs/mcp) for transports, pagination, and rug-pull detection in
+full.

@@ -123,9 +123,11 @@ public struct OpenAIModel: LanguageModel {
             let task = Task {
                 var openCalls: [String: (callID: String, name: String, arguments: String)] = [:]
                 var hadFunctionCall = false
+                var hadRefusal = false
                 var sourceCount = 0
                 var finishReason: FinishReason?
                 var usage = Usage()
+                var logprobsContent: [JSONValue] = []
 
                 do {
                     for try await sse in SSE.events(from: bytes) {
@@ -148,6 +150,9 @@ public struct OpenAIModel: LanguageModel {
                         case "response.output_text.delta":
                             if let delta = event["delta"]?.stringValue, !delta.isEmpty {
                                 continuation.yield(.textDelta(delta))
+                            }
+                            if let logprobs = event["logprobs"]?.arrayValue {
+                                logprobsContent.append(contentsOf: logprobs)
                             }
 
                         case "response.reasoning_summary_text.delta",
@@ -177,19 +182,41 @@ public struct OpenAIModel: LanguageModel {
 
                         case "response.output_item.done":
                             guard let item = event["item"],
-                                  item["type"]?.stringValue == "function_call",
+                                  let itemType = item["type"]?.stringValue,
                                   let itemID = item["id"]?.stringValue
                             else { break }
-                            let buffered = openCalls.removeValue(forKey: itemID)
-                            let callID = item["call_id"]?.stringValue ?? buffered?.callID ?? itemID
-                            let name = item["name"]?.stringValue ?? buffered?.name ?? ""
-                            let argsText = item["arguments"]?.stringValue ?? buffered?.arguments ?? ""
-                            let arguments = (try? JSONDecoder().decode(
-                                JSONValue.self, from: Data(argsText.utf8))) ?? .object([:])
-                            hadFunctionCall = true
-                            continuation.yield(.toolCall(
-                                ToolCall(id: callID, name: name, arguments: arguments)
-                            ))
+                            if itemType == "function_call" {
+                                let buffered = openCalls.removeValue(forKey: itemID)
+                                let callID = item["call_id"]?.stringValue ?? buffered?.callID ?? itemID
+                                let name = item["name"]?.stringValue ?? buffered?.name ?? ""
+                                let argsText = item["arguments"]?.stringValue ?? buffered?.arguments ?? ""
+                                let arguments = (try? JSONDecoder().decode(
+                                    JSONValue.self, from: Data(argsText.utf8))) ?? .object([:])
+                                hadFunctionCall = true
+                                continuation.yield(.toolCall(
+                                    ToolCall(id: callID, name: name, arguments: arguments)
+                                ))
+                            } else if itemType == "computer_call" {
+                                let callID = item["call_id"]?.stringValue ?? itemID
+                                var args: [String: JSONValue] = [:]
+                                if let action = item["action"] { args["action"] = action }
+                                if let safety = item["pending_safety_checks"] {
+                                    args["pending_safety_checks"] = safety
+                                }
+                                hadFunctionCall = true
+                                continuation.yield(.toolCall(ToolCall(
+                                    id: callID, name: "computer_use_preview", arguments: .object(args)
+                                )))
+                            } else if let toolName = Self.serverToolName(for: itemType) {
+                                let (input, result) = Self.serverToolPayload(itemType, item)
+                                continuation.yield(.toolCall(ToolCall(
+                                    id: itemID, name: toolName,
+                                    arguments: input, providerExecuted: true
+                                )))
+                                continuation.yield(.toolResult(ToolResult(
+                                    toolCallID: itemID, name: toolName, output: result
+                                )))
+                            }
 
                         case "response.output_text.annotation.added":
                             guard let annotation = event["annotation"],
@@ -202,6 +229,15 @@ public struct OpenAIModel: LanguageModel {
                                 title: annotation["title"]?.stringValue
                             )))
                             sourceCount += 1
+
+                        case "response.refusal.delta":
+                            if let delta = event["delta"]?.stringValue, !delta.isEmpty {
+                                hadRefusal = true
+                                continuation.yield(.textDelta(delta))
+                            }
+
+                        case "response.refusal.done":
+                            hadRefusal = true
 
                         case "response.completed", "response.incomplete", "response.failed":
                             if let u = event["response"]?["usage"] {
@@ -232,10 +268,14 @@ public struct OpenAIModel: LanguageModel {
                             break
                         }
                     }
-                    continuation.yield(.finish(
-                        reason: finishReason ?? (hadFunctionCall ? .toolCalls : .stop),
-                        usage: usage
-                    ))
+                    if !logprobsContent.isEmpty {
+                        continuation.yield(.providerMetadata(
+                            .object(["openai": .object(["logprobs": .array(logprobsContent)])])
+                        ))
+                    }
+                    var reason = finishReason ?? (hadFunctionCall ? .toolCalls : .stop)
+                    if hadRefusal && reason == .stop { reason = .contentFilter }
+                    continuation.yield(.finish(reason: reason, usage: usage))
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
@@ -251,6 +291,53 @@ public struct OpenAIModel: LanguageModel {
         case "max_output_tokens": .length
         case "content_filter": .contentFilter
         default: hadFunctionCall ? .toolCalls : .other
+        }
+    }
+
+    static func serverToolName(for itemType: String) -> String? {
+        switch itemType {
+        case "web_search_call": return "web_search"
+        case "file_search_call": return "file_search"
+        case "code_interpreter_call": return "code_interpreter"
+        case "image_generation_call": return "image_generation"
+        case "mcp_call": return "mcp"
+        default: return nil
+        }
+    }
+
+    static func serverToolPayload(
+        _ itemType: String, _ item: JSONValue
+    ) -> (input: JSONValue, result: JSONValue) {
+        switch itemType {
+        case "web_search_call":
+            let action = item["action"] ?? .object([:])
+            return (action, action)
+        case "file_search_call":
+            var input: [String: JSONValue] = [:]
+            if let queries = item["queries"] { input["queries"] = queries }
+            var result: [String: JSONValue] = [:]
+            if let results = item["results"] { result["results"] = results }
+            return (.object(input), .object(result))
+        case "code_interpreter_call":
+            var input: [String: JSONValue] = [:]
+            if let code = item["code"] { input["code"] = code }
+            var result: [String: JSONValue] = [:]
+            if let outputs = item["outputs"] { result["outputs"] = outputs }
+            return (.object(input), .object(result))
+        case "image_generation_call":
+            var result: [String: JSONValue] = [:]
+            if let generated = item["result"] { result["result"] = generated }
+            return (.object([:]), .object(result))
+        case "mcp_call":
+            var input: [String: JSONValue] = [:]
+            if let name = item["name"] { input["name"] = name }
+            if let arguments = item["arguments"] { input["arguments"] = arguments }
+            if let error = item["error"], error != .null {
+                return (.object(input), .object(["error": error]))
+            }
+            return (.object(input), .object(["output": item["output"] ?? .null]))
+        default:
+            return (.object([:]), .object([:]))
         }
     }
 
@@ -349,6 +436,10 @@ public struct OpenAIModel: LanguageModel {
                 if key == "tools", case .array(let extra) = value,
                    case .array(let existing)? = body["tools"] {
                     body["tools"] = .array(existing + extra)
+                } else if case .object(let extra) = value,
+                          case .object(var existing)? = body[key] {
+                    for (k, v) in extra { existing[k] = v }
+                    body[key] = .object(existing)
                 } else {
                     body[key] = value
                 }
@@ -359,6 +450,15 @@ public struct OpenAIModel: LanguageModel {
 
     static func inputItems(from messages: [Message], systemRole: String) -> [JSONValue] {
         var items: [JSONValue] = []
+        let computerCallIDs = Set(messages.flatMap { message -> [String] in
+            guard message.role == .assistant else { return [] }
+            return message.content.compactMap { part in
+                if case .toolCall(let call) = part, call.name == "computer_use_preview" {
+                    return call.id
+                }
+                return nil
+            }
+        })
         for message in messages {
             switch message.role {
             case .system:
@@ -385,6 +485,13 @@ public struct OpenAIModel: LanguageModel {
                                 "text": .string(text)
                             ])])
                         ]))
+                    case .toolCall(let call) where call.name == "computer_use_preview":
+                        items.append(.object([
+                            "type": "computer_call",
+                            "call_id": .string(call.id),
+                            "action": call.arguments["action"] ?? .object([:]),
+                            "pending_safety_checks": call.arguments["pending_safety_checks"] ?? .array([])
+                        ]))
                     case .toolCall(let call):
                         let argsData = (try? JSONEncoder().encode(call.arguments)) ?? Data("{}".utf8)
                         items.append(.object([
@@ -401,6 +508,25 @@ public struct OpenAIModel: LanguageModel {
             case .tool:
                 for part in message.content {
                     guard case .toolResult(let result) = part else { continue }
+                    if computerCallIDs.contains(result.toolCallID) {
+                        let screenshot = result.content?.lazy.compactMap { part -> String? in
+                            if case .image(let image) = part {
+                                return imageURLString(
+                                    data: image.data, url: image.url,
+                                    mediaType: image.resolvedMediaType
+                                )
+                            }
+                            return nil
+                        }.first
+                        var output: [String: JSONValue] = ["type": .string("computer_screenshot")]
+                        if let screenshot { output["image_url"] = .string(screenshot) }
+                        items.append(.object([
+                            "type": "computer_call_output",
+                            "call_id": .string(result.toolCallID),
+                            "output": .object(output)
+                        ]))
+                        continue
+                    }
                     let output: String
                     if case .string(let s) = result.output {
                         output = s
@@ -526,6 +652,23 @@ public extension OpenAIModel {
             return ProviderDefinedTool(
                 provider: "openai", id: "openai.code_interpreter", name: name,
                 args: .object(["type": "code_interpreter", "container": .object(container)])
+            )
+        }
+
+        public static func computerUse(
+            displayWidth: Int,
+            displayHeight: Int,
+            environment: String = "browser",
+            name: String = "computer_use_preview"
+        ) -> ProviderDefinedTool {
+            ProviderDefinedTool(
+                provider: "openai", id: "openai.computer_use_preview", name: name,
+                args: .object([
+                    "type": "computer_use_preview",
+                    "display_width": .number(Double(displayWidth)),
+                    "display_height": .number(Double(displayHeight)),
+                    "environment": .string(environment)
+                ])
             )
         }
     }

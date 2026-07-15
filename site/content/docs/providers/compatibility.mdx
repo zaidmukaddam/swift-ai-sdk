@@ -15,14 +15,14 @@ implements.
 | OpenAI (chat) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Azure OpenAI | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Anthropic | ✓ | ✓ | ✓ | ✓ | — | ✓ |
-| Google / Vertex | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| Google / Vertex | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Bedrock | ✓ | ✓ | ✓ | ✓ | — | ✓ |
 | xAI | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Groq | ✓* | ✓* | ✓ | ✓* | — | ✓ |
 | DeepSeek | ✓* | ✓* | ✓ | ✓* | — | ✓ |
 | Mistral | ✓* | ✓* | ✓ | ✓* | — | — |
 | Perplexity | — | ✓* | — | ✓* | ✓ | — |
-| Cohere | ✓ | ✓ | — | ✓ | ✓ | — |
+| Cohere | ✓ | ✓ | ✓ | ✓ | ✓ | — |
 | Foundation Models | ✓ | ✓ | — | — | — | — |
 | OpenAI-compatible | ✓* | ✓* | ✓* | ✓* | — | — |
 
@@ -34,7 +34,8 @@ library doesn't pretend otherwise.
 mechanism: JSON schema mode on the OpenAI wire, constrained decoding on
 Gemini, a forced tool call on Anthropic, guided generation on-device.
 *Sources* means citations surface as `StreamPart.source` (OpenAI url
-annotations, xAI live search, Perplexity and Cohere citations).
+annotations, xAI live search, Google Search grounding chunks, Perplexity
+and Cohere citations).
 *Cached tokens* means `usage.cachedInputTokens` is populated on
 prompt-cache hits.
 
@@ -89,12 +90,12 @@ generic `reasoningConfig` (where `xhigh` becomes `max`).
 
 | Capability | Providers |
 | --- | --- |
-| [Embeddings](/docs/embeddings) | OpenAI, Azure OpenAI, Cohere, any OpenAI-compatible endpoint |
-| [Reranking](/docs/reranking) | Cohere |
-| [Image generation](/docs/image-generation) | OpenAI (`gpt-image-2`, edits included), fal, Luma, Replicate |
-| [Speech generation](/docs/speech-generation) | OpenAI, ElevenLabs, LMNT, Hume, Deepgram, Sarvam |
-| [Transcription](/docs/transcription) | OpenAI, ElevenLabs, Deepgram, AssemblyAI, Rev.ai, Gladia, Sarvam |
-| [Video generation](/docs/video-generation) | xAI, Luma |
+| [Embeddings](/docs/embeddings) | OpenAI, Azure OpenAI, Cohere, Voyage, Alibaba, any OpenAI-compatible endpoint |
+| [Reranking](/docs/reranking) | Cohere, Voyage |
+| [Image generation](/docs/image-generation) | OpenAI (`gpt-image-2`, edits included), xAI, fal, Luma, Replicate, Black Forest Labs, ByteDance, Prodia, QuiverAI (SVG) |
+| [Speech generation](/docs/speech-generation) | OpenAI, ElevenLabs, LMNT, Hume, Deepgram, Sarvam, xAI, Cartesia |
+| [Transcription](/docs/transcription) | OpenAI, ElevenLabs, Deepgram, AssemblyAI, Rev.ai, Gladia, Sarvam, xAI, Cartesia |
+| [Video generation](/docs/video-generation) | xAI (generations, edits, extensions), Luma, ByteDance, Kling, Alibaba (Wan) |
 | [Realtime voice](/docs/realtime) | OpenAI, xAI, Google (Gemini Live) |
 | [Files and skills](/docs/files-and-skills) | OpenAI files; Anthropic files and skills |
 
@@ -119,6 +120,9 @@ and environment variables:
 | `OllamaModel` | `localhost:11434/v1` | no key |
 | `LMStudioModel` | `localhost:1234/v1` | no key |
 | `SarvamModel` | `api.sarvam.ai/v1` | `SARVAM_API_KEY` |
+| `MoonshotModel` | `api.moonshot.ai/v1` | `MOONSHOT_API_KEY` |
+| `AlibabaModel` | `dashscope-intl.aliyuncs.com/compatible-mode/v1` | `ALIBABA_API_KEY` |
+| `HuggingFaceModel` | `router.huggingface.co/v1` | `HUGGINGFACE_API_KEY` |
 
 `OpenAICompatibleProvider` remains the general initializer for any other
 chat-completions endpoint. Replicate has a first-class

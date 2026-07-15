@@ -17,7 +17,9 @@ Key from `ANTHROPIC_API_KEY`; base URL `https://api.anthropic.com/v1`.
   forces the model to call it.
 - Thinking streams as `.reasoningDelta`; the `reasoning` parameter
   translates per model tier (below).
-- `usage.cachedInputTokens` is populated on prompt-cache hits.
+- `usage.cachedInputTokens` is populated on prompt-cache hits;
+  `result.providerMetadata["anthropic"]["cacheCreationInputTokens"]` reports
+  tokens written to the cache.
 - Anthropic-native fields (`thinking`, cache-control blocks) go through
   `providerOptions` and win over anything the library sets.
 

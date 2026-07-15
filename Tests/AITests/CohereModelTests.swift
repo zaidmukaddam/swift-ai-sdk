@@ -315,4 +315,39 @@ final class CohereEmbeddingModelTests: XCTestCase {
         let data = Data(#"{"embeddings":{},"meta":{}}"#.utf8)
         XCTAssertThrowsError(try CohereEmbeddingModel.parseResponse(data))
     }
+
+    private func reasoningBody(
+        _ reasoning: ReasoningEffort,
+        modelID: String = "command-a-reasoning-08-2025",
+        maxOutputTokens: Int = 8192
+    ) -> [String: JSONValue] {
+        let request = LanguageModelRequest(
+            messages: [.user("x")], maxOutputTokens: maxOutputTokens, reasoning: reasoning
+        )
+        return CohereModel.requestBody(for: request, modelID: modelID).objectValue ?? [:]
+    }
+
+    func testReasoningModelNoneDisablesThinking() {
+        XCTAssertEqual(reasoningBody(.none)["thinking"], .object(["type": "disabled"]))
+    }
+
+    func testReasoningModelEffortEnablesThinkingWithBudget() {
+        let thinking = reasoningBody(.high, maxOutputTokens: 20000)["thinking"]
+        XCTAssertEqual(thinking?["type"], "enabled")
+        XCTAssertEqual(thinking?["token_budget"]?.intValue, 12000)
+    }
+
+    func testReasoningBudgetCapsAtThirtyOneThousand() {
+        let thinking = reasoningBody(.xhigh, maxOutputTokens: 200000)["thinking"]
+        XCTAssertEqual(thinking?["token_budget"]?.intValue, 31000)
+    }
+
+    func testReasoningModelProviderDefaultOmitsThinking() {
+        XCTAssertNil(reasoningBody(.providerDefault)["thinking"])
+    }
+
+    func testNonReasoningModelNeverSendsThinking() {
+        XCTAssertNil(reasoningBody(.high, modelID: "command-a-03-2025")["thinking"])
+        XCTAssertNil(reasoningBody(.none, modelID: "command-a-03-2025")["thinking"])
+    }
 }

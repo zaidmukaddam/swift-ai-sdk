@@ -1,6 +1,6 @@
 ---
 title: Amazon Bedrock
-description: The Converse API over AWS event-stream framing, with API-key auth.
+description: The Converse API over AWS event-stream framing, with API-key or SigV4 auth.
 ---
 
 ```swift
@@ -10,10 +10,22 @@ let model = BedrockModel(
 )
 ```
 
-Key from `AWS_BEARER_TOKEN_BEDROCK` — Bedrock's API-key auth, no SigV4
-signing or credential chain needed. The base URL derives from the
-region (`https://bedrock-runtime.{region}.amazonaws.com`) unless you
-pass one.
+Two auth modes. The simplest is Bedrock's API-key auth via
+`AWS_BEARER_TOKEN_BEDROCK`. For IAM credentials, pass `accessKeyID:` /
+`secretAccessKey:` (and `sessionToken:` for temporary creds), or set
+`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` — the
+request is then **SigV4-signed** for the region. When both are present,
+SigV4 wins. The base URL derives from the region
+(`https://bedrock-runtime.{region}.amazonaws.com`) unless you pass one.
+
+```swift
+let model = BedrockModel(
+  "anthropic.claude-sonnet-4-5-20250929-v1:0",
+  region: "us-east-1",
+  accessKeyID: "AKIA…",
+  secretAccessKey: "…"
+)
+```
 
 ## Features
 
@@ -21,7 +33,8 @@ pass one.
 - Responses stream in AWS's binary event-stream framing; the library
   decodes it natively.
 - `usage.cachedInputTokens` is populated where the model reports cache
-  reads.
+  reads; guardrail `trace` and `cacheWriteInputTokens` arrive on
+  `result.providerMetadata["bedrock"]`.
 
 ## Models
 

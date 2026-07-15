@@ -32,6 +32,8 @@ public func generateText(
     onStepFinish: OnStepFinish? = nil,
     onFinish: (@Sendable (GenerateTextResult) async -> Void)? = nil,
     onError: (@Sendable (Error) async -> Void)? = nil,
+    repairToolCall: (@Sendable (ToolCall, [any AIToolProtocol]) async -> ToolCall?)? = nil,
+    output: JSONValue? = nil,             // structured final object alongside tool calls → result.experimentalOutput
     maxRetries: Int = 2
 ) async throws -> GenerateTextResult
 ```
@@ -60,13 +62,15 @@ public struct GenerateTextResult: Sendable {
     public var sources: [Source]       // citations across all steps
     public var steps: [StepResult]     // one per model round-trip
     public var messages: [Message]     // full history incl. tool turns, ready to persist
+    public var providerMetadata: JSONValue?   // per-provider extras, keyed by provider name
+    public var experimentalOutput: JSONValue? // parsed object when `output:` was set
     public var finishReason: FinishReason
     public var usage: Usage            // combined across steps
     public var stepCount: Int { steps.count }
 }
 ```
 
-`text` and `reasoningText` reflect the last step only; `toolCalls`, `toolResults`, and `sources` are flattened across every step.
+`text` and `reasoningText` reflect the last step only; `toolCalls`, `toolResults`, and `sources` are flattened across every step. `providerMetadata` collects structured extras merged by provider key: `["google"]["groundingMetadata"]`, `["openai"]["logprobs"]`, `["anthropic"]["cacheCreationInputTokens"]`, `["bedrock"]["trace"]`, `["perplexity"]["images"/"related_questions"]`.
 
 ## streamText
 
@@ -98,6 +102,9 @@ public func streamText(
     onStepFinish: OnStepFinish? = nil,
     onFinish: (@Sendable (GenerateTextResult) async -> Void)? = nil,
     onError: (@Sendable (Error) async -> Void)? = nil,
+    onChunk: (@Sendable (TextStreamPart) -> Void)? = nil,   // fires per streamed part
+    onAbort: (@Sendable () async -> Void)? = nil,           // fires on cancellation
+    repairToolCall: (@Sendable (ToolCall, [any AIToolProtocol]) async -> ToolCall?)? = nil,
     maxRetries: Int = 2
 ) -> StreamTextResult
 ```
@@ -108,8 +115,11 @@ public func streamText(
 public struct StreamTextResult: Sendable {
     public let fullStream: AsyncThrowingStream<TextStreamPart, Error>
     public var textStream: AsyncThrowingStream<String, Error> { get }
+    // smoothedTextStream(chunking: .word/.line, delay:) re-chunks textStream for calmer UI
 }
 ```
+
+`fullStream` also emits `.providerMetadata(JSONValue)`. Wrap `textStream` with the top-level `smoothStream(_:chunking:delay:)` (or `result.smoothedTextStream()`) to re-chunk deltas by word or line with an optional delay.
 
 `textStream` is `fullStream` reduced to assistant `.textDelta` values only.
 

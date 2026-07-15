@@ -33,9 +33,43 @@ public struct XaiVideoModel: VideoModel {
     }
 
     public func generateVideos(_ request: VideoModelRequest) async throws -> VideoModelResponse {
-        let (createData, createResponse) = try await urlSession.data(
-            for: try buildCreateRequest(request)
-        )
+        try await submitAndAwait(buildCreateRequest(request))
+    }
+
+    public func editVideo(
+        prompt: String,
+        videoURL: URL? = nil,
+        fileID: String? = nil,
+        providerOptions: JSONValue? = nil
+    ) async throws -> VideoModelResponse {
+        var body: [String: JSONValue] = [
+            "model": .string(modelID),
+            "prompt": .string(prompt),
+            "video": try Self.videoInput(url: videoURL, fileID: fileID)
+        ]
+        Self.merge(providerOptions, into: &body)
+        return try await submitAndAwait(try buildJSONRequest(path: "videos/edits", body: body))
+    }
+
+    public func extendVideo(
+        prompt: String,
+        videoURL: URL? = nil,
+        fileID: String? = nil,
+        durationSeconds: Int? = nil,
+        providerOptions: JSONValue? = nil
+    ) async throws -> VideoModelResponse {
+        var body: [String: JSONValue] = [
+            "model": .string(modelID),
+            "prompt": .string(prompt),
+            "video": try Self.videoInput(url: videoURL, fileID: fileID)
+        ]
+        if let durationSeconds { body["duration"] = .number(Double(durationSeconds)) }
+        Self.merge(providerOptions, into: &body)
+        return try await submitAndAwait(try buildJSONRequest(path: "videos/extensions", body: body))
+    }
+
+    private func submitAndAwait(_ createRequest: URLRequest) async throws -> VideoModelResponse {
+        let (createData, createResponse) = try await urlSession.data(for: createRequest)
         if let http = createResponse as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw AIError.http(
                 status: http.statusCode, body: String(decoding: createData, as: UTF8.self)
@@ -67,6 +101,30 @@ public struct XaiVideoModel: VideoModel {
                 return terminal
             }
         }
+    }
+
+    static func videoInput(url: URL?, fileID: String?) throws -> JSONValue {
+        if let fileID { return .object(["file_id": .string(fileID)]) }
+        if let url { return .object(["url": .string(url.absoluteString)]) }
+        throw AIError.invalidRequest("xAI video edit/extension needs a video URL or file_id")
+    }
+
+    static func merge(_ providerOptions: JSONValue?, into body: inout [String: JSONValue]) {
+        if case .object(let options)? = providerOptions {
+            for (key, value) in options { body[key] = value }
+        }
+    }
+
+    func buildJSONRequest(path: String, body: [String: JSONValue]) throws -> URLRequest {
+        var urlRequest = URLRequest(url: baseURL.appendingPathComponent(path))
+        urlRequest.httpMethod = "POST"
+        if !apiKey.isEmpty {
+            urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
+        urlRequest.setValue("application/json", forHTTPHeaderField: "content-type")
+        for (field, value) in headers { urlRequest.setValue(value, forHTTPHeaderField: field) }
+        urlRequest.httpBody = try JSONEncoder().encode(JSONValue.object(body))
+        return urlRequest
     }
 
     static func resolvePoll(_ status: JSONValue) throws -> VideoModelResponse? {

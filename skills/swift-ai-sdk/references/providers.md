@@ -10,7 +10,7 @@ Every provider is a `LanguageModel` (or `EmbeddingModel` / `SpeechModel` / `Tran
 | OpenAI (chat) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Azure OpenAI | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Anthropic | ✓ | ✓ | ✓ | ✓ | — | ✓ |
-| Google / Vertex | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| Google / Vertex | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Bedrock | ✓ | ✓ | ✓ | ✓ | — | ✓ |
 | xAI | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Groq | ✓* | ✓* | ✓ | ✓* | — | ✓ |
@@ -82,22 +82,26 @@ let emb = azure.textEmbeddingModel("my-embed-deployment")
 
 ### Bedrock — `BedrockModel`
 
-`init(_ modelID:apiKey:region:baseURL:headers:urlSession:)`. Env `AWS_BEARER_TOKEN_BEDROCK`. `region: String = "us-east-1"`, default base `https://bedrock-runtime.{region}.amazonaws.com`. Reasoning by id prefix: `anthropic.*` → Claude thinking, `openai.*` → `reasoning_effort`, else generic `reasoningConfig` (`xhigh` → `max`).
+`init(_ modelID:apiKey:region:accessKeyID:secretAccessKey:sessionToken:baseURL:headers:urlSession:)`. Two auth modes: `AWS_BEARER_TOKEN_BEDROCK` (API key), or IAM creds via `accessKeyID`/`secretAccessKey`/`sessionToken` (or `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN`) which trigger **SigV4 signing** for the region. When both are present, SigV4 wins. `region: String = "us-east-1"`, default base `https://bedrock-runtime.{region}.amazonaws.com`. Reasoning by id prefix: `anthropic.*` → Claude thinking, `openai.*` → `reasoning_effort`, else generic `reasoningConfig` (`xhigh` → `max`). Guardrail `trace` + `cacheWriteInputTokens` land on `result.providerMetadata["bedrock"]`.
 
 ```swift
-let m = BedrockModel("anthropic.claude-sonnet-5", region: "us-west-2")
+let key = BedrockModel("anthropic.claude-sonnet-5", region: "us-west-2")            // API key
+let iam = BedrockModel("anthropic.claude-sonnet-5", region: "us-west-2",
+                       accessKeyID: "AKIA…", secretAccessKey: "…")                   // SigV4
 ```
 
 ### xAI — `XaiModel` (Responses) / `.chat`
 
-Env `XAI_API_KEY`, base `https://api.x.ai/v1`. Same `OpenAIModel`-style split. Has `SearchParameters` for live search (sources).
+Env `XAI_API_KEY`, base `https://api.x.ai/v1`. Same `OpenAIModel`-style split. Provider-executed `XaiModel.Tools` (`webSearch`/`xSearch` with image/video toggles, `codeExecution`, `fileSearch`, `mcpServer`) are the current search path; `SearchParameters` (live search) is **deprecated** — use the tools. Unified `topK` reaches Grok's `top_k`; `min_p`/`logprobs` ride `providerOptions`.
 
 ```swift
-let m = XaiModel("grok-4.20")
-let chat = XaiModel.chat("grok-4.20")
+let m = XaiModel("grok-4.5")
+let chat = XaiModel.chat("grok-4.5")
 ```
 
 `grok-4.20` date-stamped `-reasoning`/`-non-reasoning` variants ignore the `reasoning` param (behavior baked in).
+
+**Beyond chat:** `XaiImageModel` (`/images/generations` + edits), `XaiSpeechModel` (`grok-tts`), `XaiTranscriptionModel` (`grok-stt`), `XaiVideoModel` (`generateVideos`/`editVideo`/`extendVideo`), `XaiRealtimeModel`. `XaiModel.chat(...).submitDeferredCompletion(_:)` runs a completion async; `compactResponse(previousResponseID:)` compacts stored context. Platform REST clients: `XaiFilesClient`, `XaiBatchClient`, `XaiCollectionsClient` (Files/Batch/Deferred require a non-ZDR account).
 
 ### Groq / DeepSeek / Mistral / Perplexity — chat-completions wrappers
 
@@ -116,7 +120,7 @@ let d = DeepSeekModel("deepseek-reasoner")
 let p = PerplexityModel("sonar-pro")
 ```
 
-Mistral maps `reasoning` → `reasoning_effort` only on `mistral-small-latest`, `mistral-small-2603`, `mistral-medium-3`, `mistral-medium-3.5`. Perplexity has no upstream tool calling; sources surface as citations.
+Mistral maps `reasoning` → `reasoning_effort` only on `mistral-small-latest`, `mistral-small-2603`, `mistral-medium-3`, `mistral-medium-3.5`. Groq's compound models take server tools via `GroqModel.Tools.browserSearch()` / `codeExecution()`. Perplexity has no upstream tool calling; citations + the richer `search_results` (title + url) surface as `.source`, and `images` / `related_questions` (request them with `return_images` / `return_related_questions` in `providerOptions`) land on `result.providerMetadata["perplexity"]`.
 
 ### Cohere — `CohereModel`
 
@@ -141,6 +145,9 @@ Named services have dedicated `LanguageModel` types even when they share the cha
 | `VercelModel` | `api.v0.dev/v1` | `V0_API_KEY` |
 | `AIGatewayModel` | `ai-gateway.vercel.sh/v1` | `AI_GATEWAY_API_KEY` |
 | `SarvamModel` | `api.sarvam.ai/v1` | `SARVAM_API_KEY` |
+| `MoonshotModel` | `api.moonshot.ai/v1` | `MOONSHOT_API_KEY` |
+| `AlibabaModel` | `dashscope-intl.aliyuncs.com/compatible-mode/v1` | `ALIBABA_API_KEY` |
+| `HuggingFaceModel` | `router.huggingface.co/v1` (Responses wire) | `HUGGINGFACE_API_KEY` |
 | `OllamaModel` | `localhost:11434/v1` | no key |
 | `LMStudioModel` | `localhost:1234/v1` | no key |
 
@@ -211,4 +218,6 @@ Lookups: `languageModel`, `embeddingModel`, `imageModel`, `speechModel`, `transc
 - `AzureOpenAIProvider` and custom `OpenAICompatibleProvider` values are provider objects, not models — call them (`provider("id")`) to get an `OpenAIChatModel`.
 - Vertex `provider` is `"google.vertex"`; if you register it under `"google"` in a `ProviderRegistry`, the `provider:model` prefix and the pack's `provider` string will differ.
 - Perplexity: no tool calling upstream; passing `tools:` won't produce tool calls.
-- Embeddings only on OpenAI, Azure OpenAI, Cohere, and any OpenAI-compatible endpoint (`textEmbeddingModel`). Reranking only on Cohere.
+- Embeddings on OpenAI, Azure OpenAI, Cohere, Voyage (`VoyageEmbeddingModel`), Alibaba (`AlibabaEmbeddingModel`, native DashScope endpoint), and any OpenAI-compatible endpoint. Reranking on Cohere and Voyage (`VoyageRerankingModel`).
+- `AlibabaModel` first-classes Qwen thinking: the unified `reasoning` maps to `enable_thinking` + `thinking_budget`. `HuggingFaceModel` wraps the router's OpenAI **Responses** endpoint (not chat), and has no embeddings.
+- `OpenAIResponsesClient` manages stored/background responses: `retrieve`, `delete`, `cancel`, `compact`, `listInputItems`, `countInputTokens`.

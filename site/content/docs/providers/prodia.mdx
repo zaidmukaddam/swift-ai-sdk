@@ -1,0 +1,33 @@
+---
+title: Prodia
+description: Fast image generation on Prodia's v2 inference API.
+---
+
+`ProdiaImageModel` conforms to `ImageModel` and works with
+[`generateImage`](/docs/image-generation). It reads `PRODIA_TOKEN` and uses
+`https://inference.prodia.com/v2`. The model id is a Prodia job type; the
+prompt and extras ride the `config` object, and the image bytes come straight
+back in the response:
+
+```swift
+let result = try await generateImage(
+  model: ProdiaImageModel("inference.flux.schnell.txt2img.v2"),
+  prompt: "A neon city street in the rain"
+)
+```
+
+Set `accept:` on the initializer to request a different image MIME type; extra
+`config` fields go under the `prodia` provider key.
+
+## Models
+
+As of July 2026:
+
+| Model ID (job type) | Notes |
+| --- | --- |
+| `inference.flux.schnell.txt2img.v2` | FLUX schnell |
+| `inference.flux-fast.schnell.txt2img.v2` | Faster FLUX |
+| `inference.nano-banana.img2img.v2` | Image-to-image |
+| `inference.wan2-2.lightning.txt2vid.v0` | Text-to-video |
+
+Browse job types in the [Prodia docs](https://docs.prodia.com/).

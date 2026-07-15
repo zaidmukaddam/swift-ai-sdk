@@ -18,12 +18,16 @@ Key from `GOOGLE_GENERATIVE_AI_API_KEY`; base URL
 - The `reasoning` parameter maps to `thinkingConfig` (below); thinking
   streams as `.reasoningDelta`.
 - `usage.cachedInputTokens` reports context-cache hits.
+- Full `groundingMetadata`, `safetyRatings`, and `urlContextMetadata`
+  arrive on `result.providerMetadata["google"]` (grounding chunks also
+  surface as `.source`).
 - Native fields (`safetySettings`, `cachedContent`, ...) pass through
   `providerOptions` at the top level.
 - Grounding tools have typed builders under `GoogleModel.Tools`
   — `googleSearch`, `urlContext`, `codeExecution`, `fileSearch`,
   `enterpriseWebSearch`, `googleMaps` (Gemini 2.0 and newer). Pass them
-  in `tools:` and they run server-side:
+  in `tools:` and they run server-side. Grounding chunks surface as
+  `StreamPart.source`:
 
 ```swift
 let result = try await generateText(

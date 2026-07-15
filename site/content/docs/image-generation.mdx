@@ -57,3 +57,15 @@ let result = try await generateImage(
 | [fal](/docs/providers/fal) | `FalImageModel` | `FAL_API_KEY` or `FAL_KEY` |
 | [Luma](/docs/providers/luma) | `LumaImageModel` | `LUMA_API_KEY` |
 | [Replicate](/docs/providers/replicate) | `ReplicateImageModel` | `REPLICATE_API_TOKEN` |
+
+## Batching
+
+For providers that cap images per request, pass `maxImagesPerCall`. The
+library splits `n` across as many calls as needed and merges the results:
+
+```swift
+let result = try await generateImage(
+  model: OpenAIImageModel("gpt-image-2"),
+  prompt: "…", n: 10, maxImagesPerCall: 4
+)
+```

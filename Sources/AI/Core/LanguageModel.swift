@@ -20,6 +20,7 @@ public enum StreamPart: Sendable {
     case toolCall(ToolCall)
     case toolResult(ToolResult)
     case source(Source)
+    case providerMetadata(JSONValue)
     case finish(reason: FinishReason, usage: Usage)
 }
 

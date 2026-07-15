@@ -1,0 +1,51 @@
+---
+title: Cartesia
+description: Sonic text-to-speech and Ink transcription.
+---
+
+Both models read `CARTESIA_API_KEY`, target `https://api.cartesia.ai`, and
+send the `Cartesia-Version` header automatically.
+
+## Speech
+
+`CartesiaSpeechModel` conforms to `SpeechModel` and works with
+[`generateSpeech`](/docs/speech-generation). Cartesia needs a voice id, so pass
+one as `voice:` on the request (or set a default on the model):
+
+```swift
+let result = try await generateSpeech(
+  model: CartesiaSpeechModel("sonic-2"),
+  text: "Hello from Swift.",
+  voice: "a0e99841-438c-4a64-b679-ae501e7d6091",
+  outputFormat: "wav"
+)
+```
+
+`outputFormat` maps to the Cartesia container: `mp3` (default), `wav`, or
+`raw`/`pcm`. Set `sampleRate:` on the initializer to change the rate.
+
+## Transcription
+
+`CartesiaTranscriptionModel` conforms to `TranscriptionModel` and works with
+[`transcribe`](/docs/transcription):
+
+```swift
+let text = try await transcribe(
+  model: CartesiaTranscriptionModel("ink-whisper"),
+  audio: audioData,
+  mediaType: "audio/mpeg"
+)
+```
+
+## Models
+
+As of July 2026:
+
+| Model ID | Kind |
+| --- | --- |
+| `sonic-3` / `sonic-3.5` | Newest speech |
+| `sonic-2` / `sonic-turbo` | Speech |
+| `ink-2` | Speech |
+| `ink-whisper` | Transcription |
+
+Browse voice ids in the [Cartesia voice library](https://play.cartesia.ai/).

@@ -23,4 +23,20 @@ public struct GroqModel: OpenAICompatibleLanguageModel {
             queryParams: queryParams, urlSession: urlSession
         )
     }
+
+    public enum Tools {
+        public static func browserSearch(name: String = "browser_search") -> ProviderDefinedTool {
+            ProviderDefinedTool(
+                provider: "groq", id: "groq.browser_search", name: name,
+                args: .object(["type": "browser_search"])
+            )
+        }
+
+        public static func codeExecution(name: String = "code_execution") -> ProviderDefinedTool {
+            ProviderDefinedTool(
+                provider: "groq", id: "groq.code_execution", name: name,
+                args: .object(["type": "code_execution"])
+            )
+        }
+    }
 }

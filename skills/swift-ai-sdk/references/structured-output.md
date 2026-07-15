@@ -38,6 +38,8 @@ public func generateObject<T: Decodable & Sendable>(
 ) async throws -> GenerateObjectResult<T>
 ```
 
+Both overloads also take `repairText: (@Sendable (String, any Error) async -> String?)? = nil`. When the output won't parse, it's handed the raw text and error and returns corrected JSON (or `nil` to give up). Common use: strip Markdown code fences.
+
 ```swift
 public struct GenerateObjectResult<T: Sendable>: Sendable {
     public var object: T
@@ -45,6 +47,29 @@ public struct GenerateObjectResult<T: Sendable>: Sendable {
     public var finishReason: FinishReason
     public var usage: Usage
 }
+```
+
+## generateObjectArray
+
+Returns a typed array. Wraps the element schema in an `elements` array on the wire and unwraps it, so `result.object` is `[T]`.
+
+```swift
+public func generateObjectArray<T: Decodable & Sendable>(
+    model: any LanguageModel, of type: T.Type = T.self,
+    elementSchema: JSONValue, schemaName: String = "elements", schemaDescription: String? = nil,
+    messages: [Message] = [], system: String? = nil, prompt: String? = nil,
+    maxOutputTokens: Int = 1024, temperature: Double? = nil, providerOptions: JSONValue? = nil,
+    maxRetries: Int = 2, repairText: (@Sendable (String, any Error) async -> String?)? = nil
+) async throws -> GenerateObjectResult<[T]>
+```
+
+```swift
+let people = try await generateObjectArray(
+    model: model, of: Person.self,
+    elementSchema: Schema.object(["name": .string(), "role": .string()]).jsonSchema,
+    prompt: "Invent three founders."
+)
+people.object.map(\.name)
 ```
 
 ```swift

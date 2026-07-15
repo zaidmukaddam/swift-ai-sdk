@@ -118,6 +118,7 @@ final class ParityCompletionTests: XCTestCase {
         )
     }
 
+    @available(*, deprecated, message: "Covers the deprecated SearchParameters wire shape.")
     func testTypedSearchParametersWireShape() {
         let search = XaiModel.SearchParameters(
             mode: .auto,

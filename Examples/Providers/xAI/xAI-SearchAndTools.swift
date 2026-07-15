@@ -2,16 +2,13 @@ import AI
 
 extension XAIExamples {
     static func searchAndServerTools() async throws {
-        let search = XaiModel.SearchParameters(
-            mode: .auto,
-            returnCitations: true,
-            maxSearchResults: 10,
-            sources: [.web(country: "US"), .x(includedHandles: ["xai"]), .news()]
-        )
         let grounded = try await generateText(
             model: XaiModel("grok-4.5"),
             prompt: "What happened in AI this week?",
-            providerOptions: search.providerOptions
+            tools: [
+                XaiModel.Tools.webSearch(enableImageSearch: true),
+                XaiModel.Tools.xSearch(allowedXHandles: ["xai"])
+            ]
         )
         print(grounded.sources.map { $0.url })
 

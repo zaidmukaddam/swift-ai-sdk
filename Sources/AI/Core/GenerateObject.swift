@@ -19,7 +19,8 @@ public func generateObject<T: Decodable & Sendable>(
     maxOutputTokens: Int = 1024,
     temperature: Double? = nil,
     providerOptions: JSONValue? = nil,
-    maxRetries: Int = 2
+    maxRetries: Int = 2,
+    repairText: (@Sendable (String, any Error) async -> String?)? = nil
 ) async throws -> GenerateObjectResult<T> {
     let outcome = try await drainObjectStream(
         model: model,
@@ -27,7 +28,7 @@ public func generateObject<T: Decodable & Sendable>(
         messages: assembleMessages(messages: messages, system: system, prompt: prompt),
         maxOutputTokens: maxOutputTokens, temperature: temperature,
         providerOptions: providerOptions, maxRetries: maxRetries,
-        onTextDelta: nil
+        onTextDelta: nil, repairText: repairText
     )
 
     guard let json = outcome.json else {
@@ -37,6 +38,52 @@ public func generateObject<T: Decodable & Sendable>(
         let object = try json.decode(T.self)
         return GenerateObjectResult(
             object: object, rawJSON: json,
+            finishReason: outcome.finishReason, usage: outcome.usage
+        )
+    } catch {
+        throw AIError.noObjectGenerated("Decoding failed: \(error). JSON: \(outcome.rawText)")
+    }
+}
+
+public func generateObjectArray<T: Decodable & Sendable>(
+    model: any LanguageModel,
+    of type: T.Type = T.self,
+    elementSchema: JSONValue,
+    schemaName: String = "elements",
+    schemaDescription: String? = nil,
+    messages: [Message] = [],
+    system: String? = nil,
+    prompt: String? = nil,
+    maxOutputTokens: Int = 1024,
+    temperature: Double? = nil,
+    providerOptions: JSONValue? = nil,
+    maxRetries: Int = 2,
+    repairText: (@Sendable (String, any Error) async -> String?)? = nil
+) async throws -> GenerateObjectResult<[T]> {
+    let wrapperSchema: JSONValue = .object([
+        "type": .string("object"),
+        "properties": .object([
+            "elements": .object(["type": .string("array"), "items": elementSchema])
+        ]),
+        "required": .array([.string("elements")]),
+        "additionalProperties": .bool(false)
+    ])
+    let outcome = try await drainObjectStream(
+        model: model,
+        responseFormat: .json(schema: wrapperSchema, name: schemaName, description: schemaDescription),
+        messages: assembleMessages(messages: messages, system: system, prompt: prompt),
+        maxOutputTokens: maxOutputTokens, temperature: temperature,
+        providerOptions: providerOptions, maxRetries: maxRetries,
+        onTextDelta: nil, repairText: repairText
+    )
+
+    guard let json = outcome.json, let elements = json["elements"] else {
+        throw AIError.noObjectGenerated(outcome.rawText)
+    }
+    do {
+        let objects = try elements.decode([T].self)
+        return GenerateObjectResult(
+            object: objects, rawJSON: json,
             finishReason: outcome.finishReason, usage: outcome.usage
         )
     } catch {
@@ -220,7 +267,8 @@ private func drainObjectStream(
     temperature: Double?,
     providerOptions: JSONValue?,
     maxRetries: Int,
-    onTextDelta: (@Sendable (String) -> Void)?
+    onTextDelta: (@Sendable (String) -> Void)?,
+    repairText: (@Sendable (String, any Error) async -> String?)? = nil
 ) async throws -> ObjectOutcome {
     let request = LanguageModelRequest(
         messages: messages,
@@ -252,19 +300,26 @@ private func drainObjectStream(
         case .finish(let reason, let u):
             finishReason = reason
             usage = u
-        case .reasoningDelta, .toolCallStart, .toolResult, .source:
+        case .reasoningDelta, .toolCallStart, .toolResult, .source, .providerMetadata:
             break
         }
     }
 
     let rawText = text.isEmpty ? argumentsText : text
-    let json: JSONValue? = {
+    var json: JSONValue? = {
         if let call = structuredCall { return call.arguments }
         guard let data = rawText.data(using: .utf8),
               let value = try? JSONDecoder().decode(JSONValue.self, from: data)
         else { return PartialJSON.parse(rawText) }
         return value
     }()
+
+    if json == nil, let repairText,
+       let repaired = await repairText(rawText, AIError.noObjectGenerated(rawText)),
+       let data = repaired.data(using: .utf8),
+       let value = try? JSONDecoder().decode(JSONValue.self, from: data) {
+        json = value
+    }
 
     return ObjectOutcome(json: json, rawText: rawText, finishReason: finishReason, usage: usage)
 }

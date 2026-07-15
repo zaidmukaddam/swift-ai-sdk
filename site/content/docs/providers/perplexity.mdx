@@ -11,13 +11,29 @@ Key from `PERPLEXITY_API_KEY`; base URL `https://api.perplexity.ai`.
 
 ## Features
 
-- Every answer is search-grounded; citations surface as
-  `StreamPart.source` and collect on `result.sources`.
+- Every answer is search-grounded; citations and the richer
+  `search_results` (title + URL) surface as `StreamPart.source` and
+  collect on `result.sources`.
 - Structured output and image input ride the chat-completions wire on
   models that support them.
 - No tool calling — Perplexity's API doesn't offer it, so the library
   doesn't pretend otherwise. The `reasoning` parameter is ignored the
   same way.
+- Image results and related questions arrive on
+  `result.providerMetadata["perplexity"]` (`images`, `related_questions`)
+  when you request them via `providerOptions` (`return_images`,
+  `return_related_questions`).
+
+```swift
+let result = try await generateText(
+  model: PerplexityModel("sonar-pro"),
+  prompt: "Show me photos of the aurora.",
+  providerOptions: ["return_images": true, "return_related_questions": true]
+)
+let meta = result.providerMetadata?["perplexity"]
+print(meta?["images"] ?? .null)
+print(meta?["related_questions"] ?? .null)
+```
 
 ```swift
 let result = try await generateText(

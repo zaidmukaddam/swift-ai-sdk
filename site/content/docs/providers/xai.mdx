@@ -1,6 +1,6 @@
 ---
 title: xAI
-description: Grok over the Responses API, typed live search, video generation, and realtime voice.
+description: Grok over the Responses API, typed live search, image/speech/video generation, and realtime voice.
 ---
 
 ```swift
@@ -14,29 +14,32 @@ Key from `XAI_API_KEY`; base URL `https://api.x.ai/v1`.
 
 - Tools, structured output, vision, streamed reasoning, citations as
   `StreamPart.source`, and cached-token usage.
-- Server-side live search is a typed option — `XaiModel.SearchParameters`
-  serializes to the `search_parameters` body field:
+- Prefer the `web_search` / `x_search` [server-side tools](#server-side-tools)
+  for search. xAI has **deprecated Live Search** (the `search_parameters`
+  body field), and requests that use it can return a "Live search is
+  deprecated" error. `XaiModel.SearchParameters` still serializes that
+  field for legacy callers, but new code should reach for the tools, which
+  carry the same image/video filters.
 
 ```swift
-let search = XaiModel.SearchParameters(
+let legacy = XaiModel.SearchParameters(
   mode: .auto,
   returnCitations: true,
   fromDate: "2026-07-01",
   maxSearchResults: 10,
-  sources: [.web(country: "US"), .x(includedHandles: ["xai"]), .news()]
-)
-
-let result = try await generateText(
-  model: XaiModel("grok-4.5"),
-  prompt: "What happened in AI this week?",
-  providerOptions: search.providerOptions
+  sources: [.web(country: "US"), .x(includedHandles: ["xai"]), .news(), .rss(links: ["https://…"])]
 )
 ```
 
-Per-source filters:
-`.web(country:excludedWebsites:allowedWebsites:safeSearch:)`,
-`.x(includedHandles:excludedHandles:postFavoriteCount:postViewCount:)`,
-`.news(country:excludedWebsites:safeSearch:)`.
+Per-source filters mirror the tool options:
+`.web(country:excludedWebsites:allowedWebsites:safeSearch:enableImageSearch:enableImageUnderstanding:)`,
+`.x(includedHandles:excludedHandles:postFavoriteCount:postViewCount:enableVideoUnderstanding:)`,
+`.news(country:excludedWebsites:safeSearch:)`, and `.rss(links:)` (xAI
+currently honors a single RSS link).
+
+The unified `topK` reaches Grok's `top_k` on the chat wire; `min_p` and
+other sampling extras (`logprobs`, `topLogprobs`, `parallel_function_calling`)
+ride `providerOptions`.
 
 ## Server-side tools
 
@@ -109,9 +112,43 @@ As of July 2026, newest first:
 | `grok-imagine-video-1.5`, `grok-imagine-image` | Video and image generation |
 | `grok-tts`, `grok-stt` | Speech in and out |
 
+## Deferred and compaction
+
+`XaiModel.chat(...)` can run a completion in the background: `deferred`
+submits the request and polls `/v1/chat/deferred-completion/{id}` until it
+lands.
+
+```swift
+let model = XaiModel.chat("grok-4.5")
+let done = try await model.submitDeferredCompletion(
+  LanguageModelRequest(messages: [.user("Summarize the news.")], maxOutputTokens: 1024)
+)
+done.text        // final assistant text
+done.usage       // token counts
+```
+
+On the Responses API, `compactResponse(previousResponseID:)` compacts a
+stored response's context and returns the new response.
+
 ## Beyond text
 
 | Surface | Entry point |
 | --- | --- |
-| [Video generation](/docs/video-generation) | `XaiVideoModel("grok-imagine-video-1.5")` — polls until the clip is ready |
+| [Image generation](/docs/image-generation) | `XaiImageModel("grok-imagine-image")` — generations and edits |
+| [Speech generation](/docs/speech-generation) | `XaiSpeechModel("grok-tts")` |
+| [Transcription](/docs/transcription) | `XaiTranscriptionModel("grok-stt")` |
+| [Video generation](/docs/video-generation) | `XaiVideoModel("grok-imagine-video-1.5")` — `generateVideos`, `editVideo`, `extendVideo` |
 | [Realtime voice](/docs/realtime) | `XaiRealtimeModel("grok-voice-latest")` |
+
+## Platform APIs
+
+Typed clients wrap the rest of the REST surface:
+
+- `XaiFilesClient`: `upload`, `list`, `get`, `download`, `delete` on `/v1/files`.
+- `XaiBatchClient`: `create`, `get`, `list`, `requests`, `results` on `/v1/batches`.
+- `XaiCollectionsClient`: `create`, `search`, and document management for
+  the retrieval collections API.
+
+Files, Batch, and deferred completions all store data server-side, so
+Zero Data Retention teams get a 403/400 from them — those accounts are
+limited to the streaming chat and Responses paths.

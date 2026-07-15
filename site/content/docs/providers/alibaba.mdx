@@ -1,0 +1,61 @@
+---
+title: Alibaba
+description: Qwen chat and embeddings through Alibaba's OpenAI-compatible mode.
+---
+
+`AlibabaModel` reads `ALIBABA_API_KEY` and targets
+`https://dashscope-intl.aliyuncs.com/compatible-mode/v1`.
+
+```swift
+let model = AlibabaModel("qwen3-max")
+let result = try await generateText(model: model, prompt: "Say hello.")
+print(result.text)
+```
+
+Tools, structured output, vision, and reasoning ride the shared
+chat-completions wire; `qwen3-*-thinking` and `qwq-*` models stream reasoning
+as `.reasoningDelta`. The unified `reasoning` parameter maps to Qwen's
+`enable_thinking` + `thinking_budget` (`.none` disables thinking; an effort
+level enables it with a budget from 1,024 up to 38,912 tokens).
+
+## Embeddings
+
+`AlibabaEmbeddingModel` works with [`embed` and `embedMany`](/docs/embeddings):
+
+```swift
+let vectors = try await embedMany(
+  model: AlibabaEmbeddingModel("text-embedding-v4"),
+  values: documents
+)
+```
+
+## Video
+
+`AlibabaVideoModel` conforms to `VideoModel` and works with
+[`generateVideos`](/docs/video-generation). It submits an async DashScope task
+and polls until it's `SUCCEEDED`. Pass an image for image-to-video (or use an
+`-i2v` model id); extra Wan parameters go under the `alibaba` provider key:
+
+```swift
+let video = try await generateVideos(
+  model: AlibabaVideoModel("wan2.6-t2v"),
+  prompt: "A paper boat sailing down a rain gutter"
+)
+```
+
+## Models
+
+As of July 2026:
+
+| Model ID | Notes |
+| --- | --- |
+| `qwen3-max` / `qwen3.7-max` | Flagship |
+| `qwen-plus` / `qwen-flash` / `qwen-turbo` | Balanced, fast, cheap tiers |
+| `qwen3-coder-plus` / `qwen3-coder-flash` | Code |
+| `qwen3-235b-a22b-thinking-2507` | Reasoning MoE |
+| `qwq-32b` / `qwq-plus` | Reasoning |
+| `text-embedding-v4` | Embeddings (`AlibabaEmbeddingModel`) |
+| `wan2.7-t2v` / `wan2.6-t2v` / `-i2v` | Video (`AlibabaVideoModel`) |
+
+See DashScope's [model list](https://www.alibabacloud.com/help/en/model-studio/models)
+for availability. Any id the API serves works.

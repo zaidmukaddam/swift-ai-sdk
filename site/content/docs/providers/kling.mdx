@@ -1,0 +1,38 @@
+---
+title: Kling AI
+description: Kling video generation with JWT authentication.
+---
+
+`KlingVideoModel` conforms to `VideoModel` and works with
+[`generateVideos`](/docs/video-generation). Kling signs each request with a
+short-lived JWT, so it takes an access key and secret key (from
+`KLING_ACCESS_KEY` / `KLING_SECRET_KEY`) rather than a single API key:
+
+```swift
+let video = try await generateVideos(
+  model: KlingVideoModel("kling-v2-master-t2v"),
+  prompt: "A hot air balloon drifting over green hills"
+)
+```
+
+The `-t2v`, `-i2v`, and `-motion-control` suffixes select the endpoint and are
+stripped from the API model name (so `kling-v2.1-master-i2v` becomes
+`kling-v2-1-master` on the `image2video` endpoint). Passing an image with a
+suffixless id also routes to image-to-video. The model submits the task and
+polls until `task_status` is `succeed`. Tune polling with `pollInterval:` and
+`pollTimeout:`.
+
+## Models
+
+As of July 2026 (each has `-t2v` / `-i2v` variants):
+
+| Model ID | Notes |
+| --- | --- |
+| `kling-v3.0-t2v` / `-i2v` / `-motion-control` | Newest |
+| `kling-v2.6-t2v` / `-i2v` / `-motion-control` | v2.6 line |
+| `kling-v2.5-turbo-t2v` / `-i2v` | Fast tier |
+| `kling-v2.1-master-t2v` / `-i2v` | v2.1 master |
+| `kling-v2-master-t2v` / `-i2v` | v2 master |
+
+See the [Kling API docs](https://app.klingai.com/global/dev/document-api) for
+per-model parameters.

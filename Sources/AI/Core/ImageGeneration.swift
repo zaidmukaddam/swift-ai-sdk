@@ -59,26 +59,28 @@ public func generateImage(
     aspectRatio: String? = nil,
     seed: Int? = nil,
     providerOptions: JSONValue? = nil,
+    maxImagesPerCall: Int? = nil,
     maxRetries: Int = 2
 ) async throws -> GenerateImageResult {
-    let request = ImageModelRequest(
-        prompt: prompt,
-        images: images,
-        n: n,
-        size: size,
-        aspectRatio: aspectRatio,
-        seed: seed,
-        providerOptions: providerOptions
-    )
-    let response = try await Retry.withRetries(maxRetries) {
-        try await model.generateImages(request)
+    let perCall = max(1, maxImagesPerCall ?? n)
+    var allImages: [Data] = []
+    var allRevised: [String?] = []
+    var remaining = max(1, n)
+    while remaining > 0 {
+        let batch = Swift.min(perCall, remaining)
+        let request = ImageModelRequest(
+            prompt: prompt, images: images, n: batch, size: size,
+            aspectRatio: aspectRatio, seed: seed, providerOptions: providerOptions
+        )
+        let response = try await Retry.withRetries(maxRetries) {
+            try await model.generateImages(request)
+        }
+        allImages += response.images
+        allRevised += response.revisedPrompts
+        remaining -= batch
     }
-    guard let first = response.images.first else {
+    guard let first = allImages.first else {
         throw AIError.decoding("Image response contained no images")
     }
-    return GenerateImageResult(
-        image: first,
-        images: response.images,
-        revisedPrompts: response.revisedPrompts
-    )
+    return GenerateImageResult(image: first, images: allImages, revisedPrompts: allRevised)
 }

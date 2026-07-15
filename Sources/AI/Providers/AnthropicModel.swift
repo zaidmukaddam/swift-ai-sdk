@@ -47,6 +47,7 @@ public struct AnthropicModel: LanguageModel {
                 var inputTokens = 0
                 var outputTokens = 0
                 var cachedTokens: Int?
+                var cacheCreationTokens: Int?
                 var finishReason: FinishReason = .stop
 
                 do {
@@ -59,6 +60,7 @@ public struct AnthropicModel: LanguageModel {
                         case "message_start":
                             inputTokens = event.message?.usage?.input_tokens ?? 0
                             cachedTokens = event.message?.usage?.cache_read_input_tokens
+                            cacheCreationTokens = event.message?.usage?.cache_creation_input_tokens
 
                         case "content_block_start":
                             if let block = event.content_block, block.type == "tool_use",
@@ -101,6 +103,13 @@ public struct AnthropicModel: LanguageModel {
                             if let out = event.usage?.output_tokens { outputTokens = out }
 
                         case "message_stop":
+                            if let cacheCreationTokens {
+                                continuation.yield(.providerMetadata(.object([
+                                    "anthropic": .object([
+                                        "cacheCreationInputTokens": .number(Double(cacheCreationTokens))
+                                    ])
+                                ])))
+                            }
                             continuation.yield(.finish(
                                 reason: finishReason,
                                 usage: Usage(
@@ -346,10 +355,31 @@ public struct AnthropicModel: LanguageModel {
                     "input": call.arguments
                 ])
             case .toolResult(let result):
+                let content: JSONValue
+                if let parts = result.content, !parts.isEmpty {
+                    content = .array(parts.compactMap { part in
+                        switch part {
+                        case .text(let text):
+                            return .object(["type": "text", "text": .string(text)])
+                        case .image(let image):
+                            return .object([
+                                "type": "image",
+                                "source": Self.imageSource(
+                                    data: image.data, url: image.url,
+                                    mediaType: image.resolvedMediaType
+                                )
+                            ])
+                        default:
+                            return nil
+                        }
+                    })
+                } else {
+                    content = .string(Self.stringify(result.output))
+                }
                 return .object([
                     "type": "tool_result",
                     "tool_use_id": .string(result.toolCallID),
-                    "content": .string(Self.stringify(result.output)),
+                    "content": content,
                     "is_error": .bool(result.isError)
                 ])
             case .toolApprovalResponse:
@@ -436,6 +466,7 @@ private struct AnthropicEvent: Decodable {
         var input_tokens: Int?
         var output_tokens: Int?
         var cache_read_input_tokens: Int?
+        var cache_creation_input_tokens: Int?
     }
     struct ContentBlock: Decodable { var type: String?; var id: String?; var name: String? }
     struct Delta: Decodable {

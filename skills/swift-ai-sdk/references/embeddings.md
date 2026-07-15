@@ -97,9 +97,13 @@ public struct CohereEmbeddingModel: EmbeddingModel { /* in CohereModel.swift */ 
 
 `OpenAIEmbeddingModel` reads `OPENAI_API_KEY` from the environment when `apiKey` is nil. Because it is OpenAI-compatible, point `baseURL` at any compatible endpoint. `CohereEmbeddingModel` uses the same `embed`/`embedMany` call sites.
 
+More conformers: `VoyageEmbeddingModel(_ modelID: String = "voyage-3.5", apiKey:baseURL:inputType:outputDimension:...)` (`VOYAGE_API_KEY`; `inputType: .query`/`.document` for asymmetric retrieval, `outputDimension:` for Matryoshka truncation) and `AlibabaEmbeddingModel(_ modelID: String = "text-embedding-v4", apiKey:baseURL:dimension:...)` (`ALIBABA_API_KEY`, native DashScope embeddings endpoint). Also `DeepInfraEmbeddingModel`, `BasetenEmbeddingModel`, `TogetherAIEmbeddingModel`, and any OpenAI-compatible endpoint via `provider.textEmbeddingModel(_:)`.
+
 ```swift
 let openai = OpenAIEmbeddingModel("text-embedding-3-small")
 let cohere = CohereEmbeddingModel("embed-v4.0")
+let voyage = VoyageEmbeddingModel("voyage-3.5", inputType: .document)
+let qwen   = AlibabaEmbeddingModel("text-embedding-v4", dimension: 1024)
 ```
 
 ## rerank
@@ -161,7 +165,7 @@ public struct CohereRerankingModel: RerankingModel {
 }
 ```
 
-`CohereRerankingModel` reads `COHERE_API_KEY` from the environment when `apiKey` is nil. A custom conformer only implements `rerank(query:documents:topN:)` returning `[RankedDocumentIndex]`; the top-level `rerank` maps indices back to documents and drops any out-of-range index.
+`CohereRerankingModel` reads `COHERE_API_KEY` from the environment when `apiKey` is nil. `VoyageRerankingModel(_ modelID: String = "rerank-2.5", apiKey:baseURL:...)` (`VOYAGE_API_KEY`) is a drop-in alternative through the same `rerank(...)` call. A custom conformer only implements `rerank(query:documents:topN:)` returning `[RankedDocumentIndex]`; the top-level `rerank` maps indices back to documents and drops any out-of-range index.
 
 ## Gotchas
 

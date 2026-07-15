@@ -14,6 +14,7 @@ public func generateImage(
     aspectRatio: String? = nil,           // e.g. "16:9" (whichever the provider takes)
     seed: Int? = nil,
     providerOptions: JSONValue? = nil,    // e.g. ["openai": ["quality": "hd", "style": "vivid"]]
+    maxImagesPerCall: Int? = nil,         // caps images per request; splits n across calls and merges
     maxRetries: Int = 2
 ) async throws -> GenerateImageResult
 
@@ -28,9 +29,14 @@ Models (`ImageModel`):
 
 ```swift
 OpenAIImageModel(_ modelID: String, apiKey: String? = nil, ...)          // OPENAI_API_KEY
+XaiImageModel(_ modelID: String = "grok-2-image", ...)                   // XAI_API_KEY, + edits
 FalImageModel(_ modelID: String, apiKey: String? = nil, ...)             // FAL_API_KEY / FAL_KEY
 LumaImageModel(_ modelID: String = "photon-1", apiKey: String? = nil, ...) // LUMA_API_KEY, polls
 ReplicateImageModel(_ modelID: String, apiKey: String? = nil, ...)       // REPLICATE_API_TOKEN
+BlackForestLabsImageModel(_ modelID: String = "flux-pro-1.1", ...)       // BFL_API_KEY, x-key, polls
+ByteDanceImageModel(_ modelID: String = "seedream-4-0-250828", ...)      // ARK_API_KEY (Seedream)
+ProdiaImageModel(_ modelID: String = "inference.flux.schnell.txt2img.v2", ...) // PRODIA_TOKEN
+QuiverAIImageModel(_ modelID: String = "arrow-1.1", ...)                 // QUIVERAI_API_KEY, returns SVG bytes
 ```
 
 ```swift
@@ -73,6 +79,8 @@ ElevenLabsSpeechModel(_ modelID: String, ...)                                // 
 LMNTSpeechModel(_ modelID: String = "blizzard", ...)                         // LMNT_API_KEY
 HumeSpeechModel(_ modelID: String = "default", ...)                          // HUME_API_KEY, voice-only
 DeepgramSpeechModel(_ modelID: String = "aura-2-thalia-en", ...)             // DEEPGRAM_API_KEY
+XaiSpeechModel(_ modelID: String = "grok-tts", ...)                          // XAI_API_KEY
+CartesiaSpeechModel(_ modelID: String = "sonic-2", voice:sampleRate:...)     // CARTESIA_API_KEY, needs a voice id
 SarvamSpeechModel(_ modelID: String = "bulbul:v3", apiKey: String? = nil,
                   targetLanguage: String = "en-IN", ...)                     // SARVAM_API_KEY
 ```
@@ -116,6 +124,8 @@ DeepgramTranscriptionModel(_ modelID: String = "nova-3", ...)        // DEEPGRAM
 AssemblyAITranscriptionModel(_ modelID: String = "universal-3-5-pro", ...) // ASSEMBLYAI_API_KEY, async
 RevAITranscriptionModel(_ modelID: String = "machine", ...)          // REVAI_API_KEY, async
 GladiaTranscriptionModel(_ modelID: String = "solaria-1", ...)       // GLADIA_API_KEY, async
+XaiTranscriptionModel(_ modelID: String = "grok-stt", ...)           // XAI_API_KEY, sync multipart
+CartesiaTranscriptionModel(_ modelID: String = "ink-whisper", ...)   // CARTESIA_API_KEY, sync multipart
 SarvamTranscriptionModel(_ modelID: String = "saaras:v3", ...)       // SARVAM_API_KEY, sync multipart
 ```
 
@@ -157,8 +167,11 @@ public struct GenerateVideoResult {
 Models (`VideoModel`):
 
 ```swift
-XaiVideoModel(_ modelID: String, ...)                    // XAI_API_KEY, polls until rendered
+XaiVideoModel(_ modelID: String, ...)                    // XAI_API_KEY, polls; + editVideo/extendVideo
 LumaVideoModel(_ modelID: String = "ray-2", ...)         // LUMA_API_KEY, Dream Machine, polls
+ByteDanceVideoModel(_ modelID: String = "seedance-1-0-pro-250528", ...) // ARK_API_KEY (Seedance), polls
+KlingVideoModel(_ modelID: String = "kling-v2-master", accessKey:secretKey:...) // KLING_ACCESS_KEY/SECRET, JWT, polls
+AlibabaVideoModel(_ modelID: String = "wan2.6-t2v", ...) // ALIBABA_API_KEY (Wan), async poll
 ```
 
 ```swift

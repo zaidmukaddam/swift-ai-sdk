@@ -77,6 +77,10 @@ let context = reranked.rankedDocuments
   .map(\.document)
   .joined(separator: "\n\n")
 ```
+
+`VoyageRerankingModel("rerank-2.5")` is a drop-in alternative — same
+`rerank(...)` call, and Voyage also serves the retrieval embeddings via
+`VoyageEmbeddingModel`.
 </Step>
 
 <Step>

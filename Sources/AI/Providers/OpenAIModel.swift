@@ -68,6 +68,7 @@ public struct OpenAIChatModel: LanguageModel {
                 var finishReason: FinishReason = .stop
                 var usage = Usage()
                 var emittedSourceURLs = Set<String>()
+                var logprobsContent: [JSONValue] = []
 
                 do {
                     for try await sse in SSE.events(from: bytes) {
@@ -79,11 +80,29 @@ public struct OpenAIChatModel: LanguageModel {
                         if let u = chunk.usage ?? chunk.x_groq?.usage {
                             usage = Self.mapUsage(u)
                         }
-                        for (index, citation) in (chunk.citations ?? []).enumerated()
-                        where !emittedSourceURLs.contains(citation) {
-                            emittedSourceURLs.insert(citation)
+                        for result in chunk.search_results ?? [] {
+                            guard let url = result.url, emittedSourceURLs.insert(url).inserted
+                            else { continue }
+                            continuation.yield(.source(Source(
+                                id: "source-\(emittedSourceURLs.count - 1)",
+                                url: url,
+                                title: result.title
+                            )))
+                        }
+                        for citation in chunk.citations ?? []
+                        where emittedSourceURLs.insert(citation).inserted {
                             continuation.yield(.source(
-                                Source(id: "source-\(index)", url: citation)
+                                Source(id: "source-\(emittedSourceURLs.count - 1)", url: citation)
+                            ))
+                        }
+                        var perplexity: [String: JSONValue] = [:]
+                        if let images = chunk.images { perplexity["images"] = images }
+                        if let related = chunk.related_questions {
+                            perplexity["related_questions"] = related
+                        }
+                        if !perplexity.isEmpty {
+                            continuation.yield(.providerMetadata(
+                                .object(["perplexity": .object(perplexity)])
                             ))
                         }
                         guard let choice = chunk.choices?.first else { continue }
@@ -103,6 +122,9 @@ public struct OpenAIChatModel: LanguageModel {
                             if let a = tc.function?.arguments { entry.args += a }
                             toolAccum[idx] = entry
                         }
+                        if let content = choice.logprobs?.content {
+                            logprobsContent.append(contentsOf: content)
+                        }
                         if let reason = choice.finish_reason {
                             finishReason = Self.mapFinishReason(reason)
                         }
@@ -112,6 +134,11 @@ public struct OpenAIChatModel: LanguageModel {
                         let args = (try? JSONDecoder().decode(
                             JSONValue.self, from: Data(t.args.utf8))) ?? .object([:])
                         continuation.yield(.toolCall(ToolCall(id: t.id, name: t.name, arguments: args)))
+                    }
+                    if !logprobsContent.isEmpty {
+                        continuation.yield(.providerMetadata(
+                            .object(["openai": .object(["logprobs": .array(logprobsContent)])])
+                        ))
                     }
                     continuation.yield(.finish(reason: finishReason, usage: usage))
                     continuation.finish()
@@ -136,7 +163,8 @@ public struct OpenAIChatModel: LanguageModel {
         urlRequest.httpBody = try JSONEncoder().encode(
             Self.requestBody(
                 for: request, modelID: modelID,
-                reasoningStyle: .forProvider(provider)
+                reasoningStyle: .forProvider(provider),
+                providerName: provider
             )
         )
         return urlRequest
@@ -151,6 +179,7 @@ public struct OpenAIChatModel: LanguageModel {
         case deepseek
         case mistral
         case openRouter
+        case alibaba
         case unsupported
 
         static func forProvider(_ name: String) -> ReasoningWireStyle {
@@ -163,6 +192,7 @@ public struct OpenAIChatModel: LanguageModel {
             case "xai": return .xaiChat
             case "fireworks": return .fireworks
             case "openrouter": return .openRouter
+            case "alibaba": return .alibaba
             default: return .compatible
             }
         }
@@ -209,8 +239,10 @@ public struct OpenAIChatModel: LanguageModel {
             guard reasoning != .none else { return [:] }
             return ["reasoning_effort": .string(coerced(minimal: "low", xhigh: "high"))]
         case .groq:
-            guard reasoning != .none else { return [:] }
-            return ["reasoning_effort": .string(coerced(minimal: "low", xhigh: "high"))]
+            return [
+                "reasoning_format": .string("parsed"),
+                "reasoning_effort": .string(reasoning == .none ? "none" : coerced(minimal: "low", xhigh: "high"))
+            ]
         case .xaiChat:
             guard xaiModelSupportsReasoningEffort(modelID) else { return [:] }
             let effort = reasoning == .none ? "none" : coerced(minimal: "low", xhigh: "high")
@@ -233,6 +265,16 @@ public struct OpenAIChatModel: LanguageModel {
             // reasoning_effort string: https://openrouter.ai/docs/use-cases/reasoning-tokens
             guard reasoning != .none else { return [:] }
             return ["reasoning": .object(["effort": .string(coerced(minimal: "low", xhigh: "high"))])]
+        case .alibaba:
+            if reasoning == .none { return ["enable_thinking": .bool(false)] }
+            let budget: Double
+            switch reasoning {
+            case .minimal: budget = 1024
+            case .low: budget = 4096
+            case .medium: budget = 16384
+            default: budget = 38912
+            }
+            return ["enable_thinking": .bool(true), "thinking_budget": .number(budget)]
         case .unsupported:
             return [:]
         }
@@ -241,19 +283,26 @@ public struct OpenAIChatModel: LanguageModel {
     static func requestBody(
         for request: LanguageModelRequest,
         modelID: String,
-        reasoningStyle: ReasoningWireStyle = .compatible
+        reasoningStyle: ReasoningWireStyle = .compatible,
+        providerName: String = ""
     ) -> JSONValue {
         var body: [String: JSONValue] = [
             "model": .string(modelID),
             "stream": .bool(true),
-            "max_tokens": .number(Double(request.maxOutputTokens)),
             "messages": .array(mapMessages(request.messages))
         ]
+        body[reasoningStyle == .openAI ? "max_completion_tokens" : "max_tokens"]
+            = .number(Double(request.maxOutputTokens))
         if let temp = request.temperature { body["temperature"] = .number(temp) }
         if let topP = request.topP { body["top_p"] = .number(topP) }
         if let presence = request.presencePenalty { body["presence_penalty"] = .number(presence) }
         if let frequency = request.frequencyPenalty { body["frequency_penalty"] = .number(frequency) }
-        if let seed = request.seed { body["seed"] = .number(Double(seed)) }
+        if let seed = request.seed {
+            body[reasoningStyle == .mistral ? "random_seed" : "seed"] = .number(Double(seed))
+        }
+        if let topK = request.topK, reasoningStyle == .xaiChat {
+            body["top_k"] = .number(Double(topK))
+        }
         if !request.stopSequences.isEmpty {
             body["stop"] = .array(request.stopSequences.map { .string($0) })
         }
@@ -273,8 +322,10 @@ public struct OpenAIChatModel: LanguageModel {
             ])
         }
         body["stream_options"] = .object(["include_usage": .bool(true)])
-        if !request.tools.isEmpty {
-            body["tools"] = .array(request.tools.map {
+        let functionTools = request.functionTools
+        let providerTools = request.providerToolEntries(for: providerName)
+        if !functionTools.isEmpty || !providerTools.isEmpty {
+            var toolsArray: [JSONValue] = functionTools.map {
                 .object([
                     "type": "function",
                     "function": .object([
@@ -283,7 +334,9 @@ public struct OpenAIChatModel: LanguageModel {
                         "parameters": $0.parameters
                     ])
                 ])
-            })
+            }
+            toolsArray.append(contentsOf: providerTools)
+            body["tools"] = .array(toolsArray)
             switch request.toolChoice {
             case .auto:
                 break
@@ -424,13 +477,25 @@ struct OpenAIChunk: Decodable {
     var usage: Usage?
     var x_groq: XGroq?
     var citations: [String]?
+    var search_results: [SearchResult]?
+    var images: JSONValue?
+    var related_questions: JSONValue?
 
     struct XGroq: Decodable {
         var usage: Usage?
     }
+    struct SearchResult: Decodable {
+        var title: String?
+        var url: String?
+        var date: String?
+    }
     struct Choice: Decodable {
         var delta: Delta?
         var finish_reason: String?
+        var logprobs: Logprobs?
+    }
+    struct Logprobs: Decodable {
+        var content: [JSONValue]?
     }
     struct Delta: Decodable {
         var content: String?
@@ -444,11 +509,37 @@ struct OpenAIChunk: Decodable {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            content = try? container.decodeIfPresent(String.self, forKey: .content)
             reasoning_content = try? container.decodeIfPresent(String.self, forKey: .reasoning_content)
             reasoning = try? container.decodeIfPresent(String.self, forKey: .reasoning)
             tool_calls = try? container.decodeIfPresent([ToolCallDelta].self, forKey: .tool_calls)
+            if let text = try? container.decodeIfPresent(String.self, forKey: .content) {
+                content = text
+            } else if let parts = try? container.decodeIfPresent([ContentPart].self, forKey: .content) {
+                var text = ""
+                var thinking = ""
+                for part in parts {
+                    switch part.type {
+                    case "text":
+                        text += part.text ?? ""
+                    case "thinking":
+                        for chunk in part.thinking ?? [] where chunk.type == "text" {
+                            thinking += chunk.text ?? ""
+                        }
+                    default:
+                        break
+                    }
+                }
+                content = text.isEmpty ? nil : text
+                if !thinking.isEmpty {
+                    reasoning_content = (reasoning_content ?? "") + thinking
+                }
+            }
         }
+    }
+    struct ContentPart: Decodable {
+        var type: String?
+        var text: String?
+        var thinking: [ContentPart]?
     }
     struct ToolCallDelta: Decodable {
         var index: Int?

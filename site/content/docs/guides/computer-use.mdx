@@ -1,0 +1,78 @@
+---
+title: Drive a computer-use agent
+description: Let a model click, type, and read the screen, feeding screenshots back each turn.
+---
+
+Covers `Examples/Features/24-ComputerUse.swift`. Computer-use tools are
+*client-executed*: the model asks for an action (click at 100,200; type
+"hello"; take a screenshot), your code performs it against a real or virtual
+display, and you hand back a screenshot so the model can decide what to do
+next. OpenAI and Anthropic both support this; the library wires the round-trip.
+
+<Steps>
+<Step>
+### Offer the tool
+
+Add the provider's computer tool with your display size. Nothing runs yet;
+this just tells the model the capability exists.
+
+```swift
+let model = OpenAIModel("gpt-5.6-sol")
+let tools = [OpenAIModel.Tools.computerUse(displayWidth: 1280, displayHeight: 800)]
+```
+
+On Anthropic it's `AnthropicModel.Tools.computer(displayWidthPx:displayHeightPx:)`
+(plus `bash()` and `textEditor()` if you want them); the required beta header
+is set for you.
+</Step>
+
+<Step>
+### Read the requested action
+
+Each turn returns a `computer_use_preview` tool call whose `action` argument
+describes what to do: `click`, `type`, `keypress`, `scroll`, `screenshot`.
+
+```swift
+let result = try await generateText(model: model, messages: messages, tools: tools)
+guard let call = result.toolCalls.first(where: { $0.name == "computer_use_preview" }) else {
+  print(result.text)   // the model is done
+  return
+}
+let action = call.arguments["action"] ?? .object([:])
+```
+</Step>
+
+<Step>
+### Execute, then return a screenshot
+
+Perform the action against your automation backend, capture the screen, and
+send it back as **image content** on the tool result. The library maps that to
+OpenAI's `computer_call_output` (or an Anthropic `tool_result` image block).
+
+```swift
+let png = try await perform(action)          // your automation
+messages.append(Message(role: .assistant, content: [.toolCall(call)]))
+messages.append(Message(role: .tool, content: [.toolResult(ToolResult(
+  toolCallID: call.id, name: call.name, output: .null,
+  content: [.image(ImageContent(data: png, mediaType: "image/png"))]
+))]))
+```
+</Step>
+
+<Step>
+### Loop until done
+
+Repeat until the model stops asking for actions. Cap the iterations so a stuck
+run can't loop forever.
+
+```swift
+for _ in 0..<20 {
+  // generate → read action → execute → append screenshot
+  // break when there's no computer_use_preview call
+}
+```
+</Step>
+</Steps>
+
+The screenshot round-trip is the whole trick, and it rides the same
+[multimodal tool results](/docs/tools#multimodal-tool-results) any tool can use.

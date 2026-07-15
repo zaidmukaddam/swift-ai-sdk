@@ -84,6 +84,10 @@ them with files available to your app.
 | [21-UIStreamsAndTesting.swift](Features/21-UIStreamsAndTesting.swift) | UI message streams, metadata, and `AITesting` |
 | [22-Realtime.swift](Features/22-Realtime.swift) | Realtime voice sessions across OpenAI, Google, and xAI |
 | [23-WorkflowGuides.swift](Features/23-WorkflowGuides.swift) | Complete workflows used by the semantic search, transcription, media, gateway, reliability, and server-tool guides |
+| [24-ComputerUse.swift](Features/24-ComputerUse.swift) | Computer-use tools on OpenAI and Anthropic |
+| [25-ReliabilityAndOutput.swift](Features/25-ReliabilityAndOutput.swift) | `repairToolCall`, `repairText`, and structured `output` alongside tools |
+| [26-SmoothingAndMetadata.swift](Features/26-SmoothingAndMetadata.swift) | Stream smoothing and reading provider metadata |
+| [27-MCPTools.swift](Features/27-MCPTools.swift) | MCP tools over HTTP, stdio, and legacy SSE, plus rug-pull drift detection |
 
 Shared helpers and the small set of environment-backed keys used by the feature
 tutorials live in [Support.swift](Support.swift). Provider examples keep their

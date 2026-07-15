@@ -1,0 +1,31 @@
+---
+title: QuiverAI
+description: Prompt-to-SVG generation.
+---
+
+`QuiverAIImageModel` conforms to `ImageModel` and works with
+[`generateImage`](/docs/image-generation). Unlike the raster providers,
+QuiverAI returns **SVG** markup, so `result.image` holds the UTF-8 SVG bytes.
+It reads `QUIVERAI_API_KEY` and uses `https://api.quiver.ai/v1`.
+
+```swift
+let result = try await generateImage(
+  model: QuiverAIImageModel("arrow-1.1"),
+  prompt: "A minimalist mountain logo"
+)
+let svg = String(decoding: result.image, as: UTF8.self)
+```
+
+Extra fields go under the `quiverai` provider key.
+
+## Models
+
+As of July 2026:
+
+| Model ID | Notes |
+| --- | --- |
+| `arrow-1.1-max` | Highest quality |
+| `arrow-1.1` | Default |
+| `arrow-1` | Prior generation |
+
+See the [QuiverAI docs](https://docs.quiver.ai/) for style options.

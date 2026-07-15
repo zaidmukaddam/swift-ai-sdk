@@ -137,6 +137,78 @@ public struct SarvamSpeechModel: SpeechModel {
     }
 }
 
+public struct XaiSpeechModel: SpeechModel {
+    public let provider = "xai"
+    public let modelID: String
+
+    private let apiKey: String
+    private let baseURL: URL
+    private let language: String
+    private let headers: [String: String]
+    private let urlSession: URLSession
+
+    public init(
+        _ modelID: String = "grok-tts",
+        apiKey: String? = nil,
+        language: String = "auto",
+        baseURL: URL = URL(string: "https://api.x.ai/v1")!,
+        headers: [String: String] = [:],
+        urlSession: URLSession = .shared
+    ) {
+        self.modelID = modelID
+        self.apiKey = apiKey ?? ProcessInfo.processInfo.environment["XAI_API_KEY"] ?? ""
+        self.language = language
+        self.baseURL = baseURL
+        self.headers = headers
+        self.urlSession = urlSession
+    }
+
+    public func generateSpeech(_ request: SpeechModelRequest) async throws -> SpeechModelResponse {
+        let (data, response) = try await urlSession.data(for: try buildURLRequest(request))
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw AIError.http(status: http.statusCode, body: String(decoding: data, as: UTF8.self))
+        }
+        let mediaType = (response as? HTTPURLResponse)?.mimeType
+            ?? Self.mediaType(for: request.outputFormat)
+        return SpeechModelResponse(audio: data, mediaType: mediaType)
+    }
+
+    static func mediaType(for codec: String?) -> String {
+        switch codec {
+        case "wav", "pcm": "audio/wav"
+        case "opus": "audio/opus"
+        case "flac": "audio/flac"
+        case "aac": "audio/aac"
+        default: "audio/mpeg"
+        }
+    }
+
+    func buildURLRequest(_ request: SpeechModelRequest) throws -> URLRequest {
+        var body: [String: JSONValue] = [
+            "model": .string(modelID),
+            "text": .string(request.text),
+            "language": .string(language)
+        ]
+        if let voice = request.voice { body["voice_id"] = .string(voice) }
+        if let outputFormat = request.outputFormat {
+            body["output_format"] = .object(["codec": .string(outputFormat)])
+        }
+        if case .object(let options)? = request.providerOptions {
+            for (key, value) in options { body[key] = value }
+        }
+
+        var urlRequest = URLRequest(url: baseURL.appendingPathComponent("tts"))
+        urlRequest.httpMethod = "POST"
+        if !apiKey.isEmpty {
+            urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
+        urlRequest.setValue("application/json", forHTTPHeaderField: "content-type")
+        for (field, value) in headers { urlRequest.setValue(value, forHTTPHeaderField: field) }
+        urlRequest.httpBody = try JSONEncoder().encode(JSONValue.object(body))
+        return urlRequest
+    }
+}
+
 public struct HumeSpeechModel: SpeechModel {
     public let provider = "hume"
     public let modelID: String

@@ -132,3 +132,31 @@ let palette = try await generateJSON(
   prompt: "A color palette as JSON."
 )
 ```
+
+## Arrays
+
+`generateObjectArray` returns a list of objects that each match an element
+schema — it wraps them in an `elements` array on the wire and unwraps the
+result for you:
+
+```swift
+let people: GenerateObjectResult<[Person]> = try await generateObjectArray(
+  model: model,
+  of: Person.self,
+  elementSchema: Person.jsonSchema,
+  prompt: "Invent three fictional people."
+)
+```
+
+## Repairing malformed JSON
+
+Pass `repairText` to salvage output that doesn't parse — it receives the raw
+text and the error, and returns corrected JSON (or `nil` to give up):
+
+```swift
+let result = try await generateObject(
+  model: model, of: Config.self, schema: Config.jsonSchema, prompt: "…",
+  repairText: { text, _ in text.replacingOccurrences(of: "```json", with: "")
+    .replacingOccurrences(of: "```", with: "") }
+)
+```
