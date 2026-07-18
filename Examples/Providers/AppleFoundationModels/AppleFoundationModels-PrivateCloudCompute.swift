@@ -1,6 +1,7 @@
 import AI
 
 #if canImport(FoundationModels)
+#if compiler(>=6.4)
 @available(iOS 27.0, macOS 27.0, *)
 extension AppleFoundationModelsExamples {
     static func privateCloudCompute() async throws {
@@ -12,4 +13,5 @@ extension AppleFoundationModelsExamples {
         print(result.text)
     }
 }
+#endif
 #endif
