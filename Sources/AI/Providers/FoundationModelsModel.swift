@@ -180,6 +180,7 @@ public struct FoundationModelsModel: LanguageModel {
                 return AIError.transport("Private Cloud Compute: \(pccError)")
             }
             #endif
+            #if compiler(>=6.4)
             if let systemError = error as? SystemLanguageModel.Error {
                 switch systemError {
                 case .assetsUnavailable:
@@ -204,6 +205,7 @@ public struct FoundationModelsModel: LanguageModel {
                     return AIError.transport("Foundation Models: \(modelError)")
                 }
             }
+            #endif
         }
         if let generationError = error as? LanguageModelSession.GenerationError {
             return AIError.transport("Foundation Models: \(generationError)")
@@ -224,12 +226,14 @@ public struct FoundationModelsModel: LanguageModel {
 
     static func isContentFiltered(_ error: Error) -> Bool {
         if #available(iOS 27.0, macOS 27.0, visionOS 27.0, *) {
+            #if compiler(>=6.4)
             if let modelError = error as? LanguageModelError {
                 switch modelError {
                 case .guardrailViolation, .refusal: return true
                 default: return false
                 }
             }
+            #endif
         }
         return false
     }
