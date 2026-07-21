@@ -96,7 +96,7 @@ Every provider is its own pack, mirroring the `@ai-sdk/*` package family. Native
 AnthropicModel("claude-opus-4-8")          // ANTHROPIC_API_KEY
 OpenAIModel("gpt-5.6-sol")                 // OPENAI_API_KEY
 XaiModel("grok-4.5")                       // XAI_API_KEY, native Responses API
-GoogleModel("gemini-2.5-flash")            // GOOGLE_GENERATIVE_AI_API_KEY, native Gemini API
+GoogleModel("gemini-3.6-flash")            // GOOGLE_GENERATIVE_AI_API_KEY, native Gemini API
 GroqModel("llama-3.3-70b-versatile")       // GROQ_API_KEY
 DeepSeekModel("deepseek-reasoner")         // DEEPSEEK_API_KEY, streams reasoning
 MistralModel("mistral-large-latest")       // MISTRAL_API_KEY

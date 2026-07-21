@@ -4,7 +4,7 @@ description: Gemini over the native wire, Vertex AI routing, and Gemini Live rea
 ---
 
 ```swift
-let model = GoogleModel("gemini-3.5-flash")
+let model = GoogleModel("gemini-3.6-flash")
 ```
 
 Key from `GOOGLE_GENERATIVE_AI_API_KEY`; base URL
@@ -31,7 +31,7 @@ Key from `GOOGLE_GENERATIVE_AI_API_KEY`; base URL
 
 ```swift
 let result = try await generateText(
-  model: GoogleModel("gemini-3.5-flash"),
+  model: GoogleModel("gemini-3.6-flash"),
   prompt: "Ground this in current sources.",
   tools: [GoogleModel.Tools.googleSearch(), GoogleModel.Tools.urlContext()]
 )
@@ -52,7 +52,8 @@ Language models as of July 2026, newest first:
 
 | Model | Notes |
 | --- | --- |
-| `gemini-3.5-flash` | Newest flash (May 2026) |
+| `gemini-3.6-flash` | Newest flash (July 2026) |
+| `gemini-3.5-flash`, `gemini-3.5-flash-lite` | Previous flash line |
 | `gemini-3.1-pro-preview` | Pro preview |
 | `gemini-3.1-flash-lite` | Fast and cheap |
 | `gemini-3-flash`, `gemini-3-pro-preview` | Gemini 3 line |
